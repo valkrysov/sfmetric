@@ -18,7 +18,7 @@ div[data-baseweb="popover"] {
 # -------------------
 # CONFIG
 # -------------------
-st.set_page_config(layout="wide")
+#st.set_page_config(layout="wide")
 st.title("📊 San Francisco Market Dashboard")
 
 # -------------------
