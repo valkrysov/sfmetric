@@ -7,7 +7,7 @@ from market_data import load_market_data
 # -------------------
 # CONFIG
 # -------------------
-st.set_page_config(layout="wide")
+#st.set_page_config(layout="wide")
 st.title("🧠 Market Deep Dive")
 
 # -------------------
