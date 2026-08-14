@@ -4,6 +4,7 @@ import plotly.express as px
 #from sqlalchemy import create_engine
 from db import get_engine
 from market_data import load_market_data
+from market_data import compute_market_signal
 
 
 st.markdown("""
@@ -250,6 +251,74 @@ if not df_filtered.empty:
     )
 else:
     st.warning("No data for selected ZIP")
+
+
+st.markdown("### 🧠 Market Signal Engine")
+
+if selected_zip == "ALL":
+    signal_df = df_city
+    signal_scope = "San Francisco"
+else:
+    signal_df = df_filtered
+    signal_scope = f"ZIP {selected_zip}"
+
+signal = compute_market_signal(signal_df)
+
+label = signal["label"]
+confidence = signal["confidence"]
+c = signal["components"]
+
+st.caption(
+    f"Market conditions for {signal_scope} "
+    f"based on {c['transactions']:,} transactions"
+)
+
+if label == "SELLER":
+    st.success(
+        f"🔥 SELLER MARKET — Confidence: {confidence}%"
+    )
+
+elif label == "BALANCED":
+    st.info(
+        f"⚖️ BALANCED MARKET — Confidence: {confidence}%"
+    )
+
+elif label == "BUYER":
+    st.warning(
+        f"📉 BUYER MARKET — Confidence: {confidence}%"
+    )
+
+else:
+    st.warning("Insufficient data to calculate market signal")
+
+
+# -------------------
+# SIGNAL DRIVERS
+# -------------------
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        "Over Asking",
+        f"{c['over_asking'] * 100:.1f}%"
+    )
+
+with col2:
+    st.metric(
+        "Transactions",
+        f"{c['transactions']:,}"
+    )
+
+with col3:
+    st.metric(
+        "Signal Score",
+        f"{c['score'] * 100:.0f}/100"
+    )
+
+
+
+
 
 # -------------------
 # MAP
