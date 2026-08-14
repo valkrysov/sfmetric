@@ -9,7 +9,10 @@ from streamlit_folium import st_folium
 
 from your_module import get_subject, get_ranked_comps, get_comparables
 
-
+st.set_page_config(
+    page_title="SF Housing Intelligence",
+    layout="wide"
+)
 # ALL YOUR EXISTING CODE HERE (unchanged)
 
 # =========================
@@ -128,10 +131,10 @@ def plot_comps_map(subject, comps):
 # =========================
 # 🎯 UI CONFIG
 # =========================
-st.set_page_config(
-    page_title="SF Housing Intelligence",
-    layout="wide"
-)
+#st.set_page_config(
+#    page_title="SF Housing Intelligence",
+#    layout="wide"
+#)
 
 st.markdown("""
 <style>
