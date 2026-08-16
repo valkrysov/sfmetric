@@ -176,22 +176,138 @@ if not df_filtered.empty:
 # ==================================================
 # MARKET SIGNAL
 # ==================================================
+#st.markdown("### 🧠 Market Signal Engine")
+
+#signal_df = df_city if selected_zip == "ALL" else df_filtered
+#active_df = df_active_city if selected_zip == "ALL" else df_active_filtered
+
+#signal = compute_market_signal(signal_df, active_df)
+
+#label = signal["label"]
+#score = signal["confidence"]
+
+#if label == "SELLER":
+#    st.success(f"🔥 SELLER MARKET — {score}/100")
+#elif label == "BALANCED":
+#    st.info(f"⚖️ BALANCED MARKET — {score}/100")
+#else:
+#    st.warning(f"📉 BUYER MARKET — {score}/100")
+
+
+# ==================================================
+# DEFINE CURRENT ANALYSIS SCOPE
+# ==================================================
+
+if selected_zip == "ALL":
+
+    signal_df = df_city
+
+    #active_signal_df = df_active_city
+    active_df = df_active_city
+
+    signal_scope = "San Francisco"
+
+else:
+
+    signal_df = df_filtered
+
+    #active_signal_df = df_active_filtered
+    active_df = df_active_filtered
+
+    signal_scope = f"ZIP {selected_zip}"
+
+
+
+
+
+# ==================================================
+# MARKET SIGNAL ENGINE
+# ==================================================
+
 st.markdown("### 🧠 Market Signal Engine")
+#signal_df = df_city if selected_zip == "ALL" else df_filtered
+#active_df = df_active_city if selected_zip == "ALL" else df_active_filtered
 
-signal_df = df_city if selected_zip == "ALL" else df_filtered
-active_df = df_active_city if selected_zip == "ALL" else df_active_filtered
+signal = compute_market_signal(
+    signal_df,
+    #active_signal_df
+    active_df 	
+)
 
-signal = compute_market_signal(signal_df, active_df)
+
+components = signal["components"]
 
 label = signal["label"]
-score = signal["confidence"]
+
+market_score = signal["confidence"]
+
+
+st.caption(
+    f"Market conditions for {signal_scope} "
+    f"based on "
+    f"{components['historical_transactions']:,} "
+    f"historical transactions and "
+    f"{components['active_listings']:,} "
+    f"active listings"
+)
+
 
 if label == "SELLER":
-    st.success(f"🔥 SELLER MARKET — {score}/100")
+
+    st.success(
+        f"🔥 SELLER MARKET — Market Score: {market_score}/100"
+    )
+
 elif label == "BALANCED":
-    st.info(f"⚖️ BALANCED MARKET — {score}/100")
+
+    st.info(
+        f"⚖️ BALANCED MARKET — Market Score: {market_score}/100"
+    )
+
 else:
-    st.warning(f"📉 BUYER MARKET — {score}/100")
+
+    st.warning(
+        f"📉 BUYER MARKET — Market Score: {market_score}/100"
+    )
+
+
+# -------------------
+# SIGNAL KPIs
+# -------------------
+
+col1, col2, col3, col4 = st.columns(4)
+
+
+col1.metric(
+    "Sale / List",
+    f"{(1 + components['over_asking']) * 100:.1f}%"
+)
+
+
+col2.metric(
+    "Historical Sales",
+    f"{components['historical_transactions']:,}"
+)
+
+
+col3.metric(
+    "Active Listings",
+    f"{components['active_listings']:,}"
+)
+
+
+col4.metric(
+    "Market Score",
+    f"{market_score}/100"
+)
+
+
+
+
+
+
+
+
 
 # ==================================================
 # OPPORTUNITY ENGINE (RIGHT PLACE)
