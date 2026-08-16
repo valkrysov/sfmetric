@@ -379,117 +379,623 @@ def compute_market_signal(signal_df, active_df):
     }
 
 
+# ============================================================
+# OPPORTUNITY ENGINE
+# ============================================================
+
 def compute_opportunity_engine(df_active, df_history):
     """
-    Compare active listings against historical sold-market PPSF.
+    SFMetric Opportunity Engine
 
-    Returns active listings with:
-    - estimated_value
-    - discount_pct
-    - opportunity_score
+    Compares ACTIVE listings against relevant HISTORICAL SALES.
+
+    The engine uses:
+        1. Property type
+        2. ZIP code
+        3. Square footage similarity
+        4. Recent historical sales
+        5. Historical sale PPSF
+        6. ZIP/property-type benchmark
+        7. Days on market
+
+    Returns:
+        DataFrame containing ranked opportunities.
+
+    Important:
+        This is a quantitative screening engine.
+        AI explanation will be added later on the
+        Property Intelligence page.
     """
+
+    # ========================================================
+    # COPY INPUTS
+    # ========================================================
 
     active = df_active.copy()
     history = df_history.copy()
 
-    # -------------------------
-    # CLEAN NUMERIC FIELDS
-    # -------------------------
+    if active.empty or history.empty:
+        return pd.DataFrame()
 
-    active["list_price"] = pd.to_numeric(
-        active["list_price"],
-        errors="coerce"
+    # ========================================================
+    # NUMERIC CLEANUP
+    # ========================================================
+
+    numeric_active = [
+        "list_price",
+        "sqft",
+        "days_on_market"
+    ]
+
+    for col in numeric_active:
+
+        if col in active.columns:
+
+            active[col] = pd.to_numeric(
+                active[col],
+                errors="coerce"
+            )
+
+    numeric_history = [
+        "sale_price",
+        "list_price",
+        "sqft"
+    ]
+
+    for col in numeric_history:
+
+        if col in history.columns:
+
+            history[col] = pd.to_numeric(
+                history[col],
+                errors="coerce"
+            )
+
+    # ========================================================
+    # STANDARDIZE ZIP
+    # ========================================================
+
+    active["zip_code"] = (
+        active["zip_code"]
+        .astype(str)
+        .str.strip()
+        .str.replace(
+            r"\.0$",
+            "",
+            regex=True
+        )
     )
 
-    active["sqft"] = pd.to_numeric(
-        active["sqft"],
-        errors="coerce"
+    history["zip_code"] = (
+        history["zip_code"]
+        .astype(str)
+        .str.strip()
+        .str.replace(
+            r"\.0$",
+            "",
+            regex=True
+        )
     )
 
-    history["sale_price"] = pd.to_numeric(
-        history["sale_price"],
-        errors="coerce"
+    # ========================================================
+    # STANDARDIZE PROPERTY TYPE
+    # ========================================================
+
+    active["property_type"] = (
+        active["property_type"]
+        .astype(str)
+        .str.upper()
+        .str.strip()
     )
 
-    history["sqft"] = pd.to_numeric(
-        history["sqft"],
-        errors="coerce"
+    history["property_type"] = (
+        history["property_type"]
+        .astype(str)
+        .str.upper()
+        .str.strip()
     )
 
-    # -------------------------
-    # REMOVE INVALID DATA
-    # -------------------------
+    # ========================================================
+    # VALID ACTIVE LISTINGS
+    # ========================================================
 
     active = active[
-        active["list_price"].notna() &
-        active["sqft"].notna() &
-        (active["list_price"] > 0) &
+        active["list_price"].notna()
+        &
+        active["sqft"].notna()
+        &
+        (active["list_price"] > 100000)
+        &
         (active["sqft"] > 500)
+        &
+        (active["sqft"] < 10000)
     ].copy()
+
+    if active.empty:
+        return pd.DataFrame()
+
+    # ========================================================
+    # VALID HISTORICAL SALES
+    # ========================================================
 
     history = history[
-        history["sale_price"].notna() &
-        history["sqft"].notna() &
-        (history["sale_price"] > 0) &
+        history["sale_price"].notna()
+        &
+        history["sqft"].notna()
+        &
+        (history["sale_price"] > 100000)
+        &
         (history["sqft"] > 500)
+        &
+        (history["sqft"] < 10000)
     ].copy()
 
-    # -------------------------
+    if history.empty:
+        return pd.DataFrame()
+
+    # ========================================================
     # HISTORICAL PPSF
-    # -------------------------
+    # ========================================================
 
     history["sale_ppsf"] = (
         history["sale_price"] /
         history["sqft"]
     )
 
-    # Remove extreme outliers
+    # ========================================================
+    # REMOVE EXTREME PPSF OUTLIERS
+    # ========================================================
+
     history = history[
-        history["sale_ppsf"].between(300, 3000)
+        history["sale_ppsf"].between(
+            300,
+            3000
+        )
     ].copy()
 
-    # -------------------------
-    # CITY MEDIAN PPSF
-    # -------------------------
+    if history.empty:
+        return pd.DataFrame()
 
-    benchmark_ppsf = history["sale_ppsf"].median()
+    # ========================================================
+    # SALE DATE
+    # ========================================================
 
-    active["benchmark_ppsf"] = benchmark_ppsf
-
-
-    # -------------------------
-    # ESTIMATED VALUE
-    # -------------------------
-
-    active["estimated_value"] = (
-    active["sqft"] *
-    active["benchmark_ppsf"]
+    history["sale_date"] = pd.to_datetime(
+        history["sale_date"],
+        errors="coerce"
     )
 
-    # -------------------------
-    # DISCOUNT
-    # -------------------------
+    # ========================================================
+    # RECENT SALES
+    #
+    # We don't want a 2006 sale to have the same importance
+    # as a 2026 sale.
+    #
+    # Keep the most recent 5 years where possible.
+    # ========================================================
 
-    active["discount_pct"] = (
-        active["estimated_value"] -
-        active["list_price"]
-    ) / active["estimated_value"]
+    max_sale_date = history["sale_date"].max()
 
-    # -------------------------
-    # OPPORTUNITY SCORE
-    # -------------------------
+    if pd.notna(max_sale_date):
 
-    active["opportunity_score"] = (
-        active["discount_pct"] * 100
-    ).clip(lower=0, upper=100)
+        cutoff_date = (
+            max_sale_date -
+            pd.DateOffset(years=5)
+        )
 
-    # -------------------------
+        recent_history = history[
+            history["sale_date"] >= cutoff_date
+        ].copy()
+
+        # If there aren't enough recent sales,
+        # fall back to the full history.
+        if len(recent_history) >= 100:
+
+            history = recent_history
+
+    # ========================================================
+    # CITY / SCOPE BENCHMARK
+    #
+    # Used as a fallback when we don't have enough
+    # comparable ZIP/type transactions.
+    # ========================================================
+
+    scope_benchmark = (
+        history["sale_ppsf"].median()
+    )
+
+    # ========================================================
+    # CREATE RESULT COLUMNS
+    # ========================================================
+
+    results = []
+
+    # ========================================================
+    # PROCESS EACH ACTIVE LISTING
+    # ========================================================
+
+    for idx, listing in active.iterrows():
+
+        list_price = listing["list_price"]
+        sqft = listing["sqft"]
+        zip_code = listing["zip_code"]
+        property_type = listing["property_type"]
+
+        # ----------------------------------------------------
+        # MATCH HISTORICAL SALES
+        #
+        # Priority:
+        #
+        # 1. Same ZIP + same property type
+        # 2. Same ZIP
+        # 3. Same property type
+        # 4. Overall market
+        # ----------------------------------------------------
+
+        comparable = history[
+            (history["zip_code"] == zip_code)
+            &
+            (history["property_type"] == property_type)
+        ].copy()
+
+        benchmark_source = "ZIP + PROPERTY TYPE"
+
+        if len(comparable) < 10:
+
+            comparable = history[
+                history["zip_code"] == zip_code
+            ].copy()
+
+            benchmark_source = "ZIP"
+
+        if len(comparable) < 10:
+
+            comparable = history[
+                history["property_type"] == property_type
+            ].copy()
+
+            benchmark_source = "PROPERTY TYPE"
+
+        if len(comparable) < 10:
+
+            comparable = history.copy()
+
+            benchmark_source = "CITY"
+
+        # ----------------------------------------------------
+        # SQUARE FOOTAGE COMPARABLES
+        #
+        # Prefer properties within +/- 30% of subject size.
+        # ----------------------------------------------------
+
+        size_low = sqft * 0.70
+        size_high = sqft * 1.30
+
+        size_comps = comparable[
+            comparable["sqft"].between(
+                size_low,
+                size_high
+            )
+        ].copy()
+
+        # ----------------------------------------------------
+        # If enough size comps exist, use them.
+        # Otherwise use broader comps.
+        # ----------------------------------------------------
+
+        if len(size_comps) >= 5:
+
+            comparable = size_comps
+
+        # ----------------------------------------------------
+        # REMOVE EXTREME PPSF VALUES AGAIN
+        # ----------------------------------------------------
+
+        comparable = comparable[
+            comparable["sale_ppsf"].between(
+                300,
+                3000
+            )
+        ]
+
+        if comparable.empty:
+
+            benchmark_ppsf = scope_benchmark
+            comparable_count = 0
+
+        else:
+
+            # ------------------------------------------------
+            # Median PPSF is more robust than mean.
+            # ------------------------------------------------
+
+            benchmark_ppsf = (
+                comparable["sale_ppsf"]
+                .median()
+            )
+
+            comparable_count = len(comparable)
+
+        # ----------------------------------------------------
+        # ESTIMATED MARKET VALUE
+        # ----------------------------------------------------
+
+        estimated_value = (
+            sqft *
+            benchmark_ppsf
+        )
+
+        # ----------------------------------------------------
+        # DISCOUNT
+        #
+        # Positive = listing is below benchmark.
+        # ----------------------------------------------------
+
+        discount_pct = (
+            estimated_value -
+            list_price
+        ) / estimated_value
+
+        # ----------------------------------------------------
+        # LISTING PPSF
+        # ----------------------------------------------------
+
+        list_ppsf = (
+            list_price /
+            sqft
+        )
+
+        # ----------------------------------------------------
+        # PPSF DISCOUNT
+        # ----------------------------------------------------
+
+        ppsf_discount_pct = (
+            benchmark_ppsf -
+            list_ppsf
+        ) / benchmark_ppsf
+
+        # ----------------------------------------------------
+        # DAYS ON MARKET
+        # ----------------------------------------------------
+
+        dom = listing.get(
+            "days_on_market",
+            0
+        )
+
+        if pd.isna(dom):
+
+            dom = 0
+
+        # ----------------------------------------------------
+        # DOM SCORE
+        #
+        # A property sitting longer can indicate pricing
+        # pressure, but very long DOM can also indicate
+        # property-specific problems.
+        #
+        # We therefore give moderate DOM a small advantage.
+        # ----------------------------------------------------
+
+        if dom <= 7:
+
+            dom_score = 0.40
+
+        elif dom <= 30:
+
+            dom_score = 0.70
+
+        elif dom <= 60:
+
+            dom_score = 1.00
+
+        elif dom <= 90:
+
+            dom_score = 0.60
+
+        else:
+
+            dom_score = 0.30
+
+        # ----------------------------------------------------
+        # DISCOUNT SCORE
+        #
+        # 0% discount = 0
+        # 20%+ discount = 1
+        # ----------------------------------------------------
+
+        discount_score = (
+            discount_pct / 0.20
+        )
+
+        discount_score = min(
+            max(discount_score, 0),
+            1
+        )
+
+        # ----------------------------------------------------
+        # PPSF SCORE
+        # ----------------------------------------------------
+
+        ppsf_score = (
+            ppsf_discount_pct / 0.20
+        )
+
+        ppsf_score = min(
+            max(ppsf_score, 0),
+            1
+        )
+
+        # ----------------------------------------------------
+        # COMPARABLE CONFIDENCE
+        # ----------------------------------------------------
+
+        if comparable_count >= 30:
+
+            confidence_score = 1.00
+
+        elif comparable_count >= 20:
+
+            confidence_score = 0.85
+
+        elif comparable_count >= 10:
+
+            confidence_score = 0.70
+
+        elif comparable_count >= 5:
+
+            confidence_score = 0.50
+
+        else:
+
+            confidence_score = 0.25
+
+        # ----------------------------------------------------
+        # FINAL OPPORTUNITY SCORE
+        #
+        # Discount       40%
+        # PPSF advantage 30%
+        # DOM             10%
+        # Confidence      20%
+        # ----------------------------------------------------
+
+        opportunity_score = (
+
+            discount_score * 0.40
+
+            +
+
+            ppsf_score * 0.30
+
+            +
+
+            dom_score * 0.10
+
+            +
+
+            confidence_score * 0.20
+
+        ) * 100
+
+        # ----------------------------------------------------
+        # QUALIFICATION
+        #
+        # We don't want every listing to be an opportunity.
+        #
+        # Require:
+        #
+        #   >= 5% estimated discount
+        # OR
+        #   >= 5% PPSF advantage
+        #
+        # AND a minimum confidence level.
+        # ----------------------------------------------------
+
+        qualifies = (
+
+            (
+                discount_pct >= 0.05
+            )
+
+            or
+
+            (
+                ppsf_discount_pct >= 0.05
+            )
+
+        ) and comparable_count >= 5
+
+        # ----------------------------------------------------
+        # STORE RESULT
+        # ----------------------------------------------------
+
+        row = listing.to_dict()
+
+        row.update({
+
+            "benchmark_ppsf":
+                benchmark_ppsf,
+
+            "benchmark_source":
+                benchmark_source,
+
+            "comparable_count":
+                comparable_count,
+
+            "estimated_value":
+                estimated_value,
+
+            "list_ppsf":
+                list_ppsf,
+
+            "discount_pct":
+                discount_pct,
+
+            "ppsf_discount_pct":
+                ppsf_discount_pct,
+
+            "dom_score":
+                dom_score,
+
+            "confidence_score":
+                confidence_score,
+
+            "opportunity_score":
+                opportunity_score,
+
+            "qualifies":
+                qualifies
+        })
+
+        results.append(row)
+
+    # ========================================================
+    # BUILD DATAFRAME
+    # ========================================================
+
+    if not results:
+
+        return pd.DataFrame()
+
+    opportunities = pd.DataFrame(
+        results
+    )
+
+    # ========================================================
+    # KEEP ONLY QUALIFIED OPPORTUNITIES
+    # ========================================================
+
+    opportunities = opportunities[
+        opportunities["qualifies"] == True
+    ].copy()
+
+    # ========================================================
     # SORT
-    # -------------------------
+    # ========================================================
 
-    active = active.sort_values(
+    opportunities = opportunities.sort_values(
         "opportunity_score",
         ascending=False
     )
 
-    return active
+    # ========================================================
+    # FINAL RANK
+    # ========================================================
+
+    opportunities["opportunity_rank"] = (
+        range(
+            1,
+            len(opportunities) + 1
+        )
+    )
+
+    # ========================================================
+    # RESET INDEX
+    # ========================================================
+
+    opportunities.reset_index(
+        drop=True,
+        inplace=True
+    )
+
+    return opportunities

@@ -307,39 +307,180 @@ col4.metric(
 
 
 
-
-
 # ==================================================
-# OPPORTUNITY ENGINE (RIGHT PLACE)
+# OPPORTUNITY ENGINE
 # ==================================================
+
 st.markdown("### 🚀 Opportunity Engine")
 
-df_opportunities = compute_opportunity_engine(active_df, signal_df)
+# --------------------------------------------------
+# CALCULATE OPPORTUNITIES
+# --------------------------------------------------
 
-st.caption(f"Top opportunities: {len(df_opportunities):,}")
+df_opportunities = compute_opportunity_engine(
+    active_df,
+    signal_df
+).copy()
 
-if not df_opportunities.empty:
+# --------------------------------------------------
+# OPPORTUNITY SUMMARY
+# --------------------------------------------------
 
-    df_display = (
-        df_opportunities
-        .sort_values("opportunity_score", ascending=False)
-        .head(20)
+if df_opportunities.empty:
+
+    st.info(
+        f"No qualified opportunities found in {signal_scope}."
     )
 
+else:
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric(
+        "Active Listings",
+        f"{len(active_df):,}"
+    )
+
+    col2.metric(
+        "Qualified Opportunities",
+        f"{len(df_opportunities):,}"
+    )
+
+    high_conviction = len(
+        df_opportunities[
+            df_opportunities["opportunity_score"] >= 80
+        ]
+    )
+
+    col3.metric(
+        "High-Conviction",
+        f"{high_conviction:,}"
+    )
+
+    # --------------------------------------------------
+    # TOP N SELECTOR
+    # --------------------------------------------------
+
+    opportunity_limit = st.radio(
+        "Show Top Opportunities",
+        [10, 20, 30],
+        horizontal=True,
+        key="opportunity_limit"
+    )
+
+    df_display_opportunities = (
+        df_opportunities
+        .head(opportunity_limit)
+        .copy()
+    )
+
+    # --------------------------------------------------
+    # DISPLAY COLUMNS
+    # --------------------------------------------------
+
+    opportunity_cols = [
+        "address",
+        "zip_code",
+        "property_type",
+        "list_price",
+        "estimated_value",
+        "discount_pct",
+        "list_ppsf",
+        "benchmark_ppsf",
+        "opportunity_score",
+        "days_on_market"
+    ]
+
+    available_cols = [
+        col
+        for col in opportunity_cols
+        if col in df_display_opportunities.columns
+    ]
+
+    display = df_display_opportunities[
+        available_cols
+    ].copy()
+
+    # --------------------------------------------------
+    # ADD RANK
+    # --------------------------------------------------
+
+    display.insert(
+        0,
+        "Rank",
+        range(1, len(display) + 1)
+    )
+
+    # --------------------------------------------------
+    # FRIENDLY COLUMN NAMES
+    # --------------------------------------------------
+
+    display = display.rename(
+        columns={
+            "address": "Property",
+            "zip_code": "ZIP",
+            "property_type": "Type",
+            "list_price": "List Price",
+            "estimated_value": "Estimated Value",
+            "discount_pct": "Discount",
+            "list_ppsf": "List PPSF",
+            "benchmark_ppsf": "Comp PPSF",
+            "opportunity_score": "Opportunity Score",
+            "days_on_market": "DOM"
+        }
+    )
+
+    # --------------------------------------------------
+    # FORMAT
+    # --------------------------------------------------
+
+    if "List Price" in display.columns:
+        display["List Price"] = display["List Price"].map(
+            lambda x: f"${x:,.0f}"
+        )
+
+    if "Estimated Value" in display.columns:
+        display["Estimated Value"] = display["Estimated Value"].map(
+            lambda x: f"${x:,.0f}"
+        )
+
+    if "Discount" in display.columns:
+        display["Discount"] = display["Discount"].map(
+            lambda x: f"{x * 100:.1f}%"
+        )
+
+    if "List PPSF" in display.columns:
+        display["List PPSF"] = display["List PPSF"].map(
+            lambda x: f"${x:,.0f}"
+        )
+
+    if "Comp PPSF" in display.columns:
+        display["Comp PPSF"] = display["Comp PPSF"].map(
+            lambda x: f"${x:,.0f}"
+        )
+
+    if "Opportunity Score" in display.columns:
+        display["Opportunity Score"] = display[
+            "Opportunity Score"
+        ].map(
+            lambda x: f"{x:.0f}"
+        )
+
+    # --------------------------------------------------
+    # OPPORTUNITY TABLE
+    # --------------------------------------------------
+
     st.dataframe(
-        df_display[[
-            "address",
-            "zip_code",
-            "property_type",
-            "list_price",
-            "list_ppsf",
-            "estimated_value",
-            "discount_pct",
-            "opportunity_score"
-        ]],
+        display,
         use_container_width=True,
         hide_index=True
     )
+
+
+
+
+
+
 
 # ==================================================
 # MAP
