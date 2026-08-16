@@ -1,31 +1,20 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-#from sqlalchemy import create_engine
+
 from db import get_engine
-from market_data import load_market_data
-from market_data import compute_market_signal
+from market_data import (
+    load_market_data,
+    load_active_listings,
+    compute_market_signal,
+    compute_opportunity_engine
+)
 
-
-st.markdown("""
-<style>
-/* Fix date picker popup position */
-div[data-baseweb="popover"] {
-    transform: translateY(40px) !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# -------------------
-# CONFIG
-# -------------------
-#st.set_page_config(layout="wide")
 st.title("📊 San Francisco Market Dashboard")
 
 # -------------------
 # DB
 # -------------------
-
 engine = get_engine()
 
 # -------------------
@@ -35,15 +24,16 @@ st.sidebar.header("Filters")
 
 property_type = st.sidebar.selectbox(
     "Property Type",
-    ["ALL", "SFR", "CONDO", "TOWNHOUSE"]
+    ["ALL", "SFR", "CONDO", "TOWNHOUSE"],
+    key="property_type_filter"
 )
 
-#date_range = st.sidebar.date_input("Date Range", [])
 date_range = st.sidebar.date_input(
     "Date Range",
     value=[],
     min_value=pd.to_datetime("2005-01-01"),
-    max_value=pd.to_datetime("today")
+    max_value=pd.to_datetime("today"),
+    key="date_range_filter"
 )
 
 # -------------------
@@ -54,29 +44,32 @@ df_all = load_market_data(
     start_date=date_range[0] if len(date_range) == 2 else None,
     end_date=date_range[1] if len(date_range) == 2 else None,
     property_type=None if property_type == "ALL" else property_type
-).copy(deep=True)
+)
 
+df_active = load_active_listings(
+    engine,
+    property_type=None if property_type == "ALL" else property_type
+)
 
-
-#✅ CLEAN SOLUTION (drop-in fix)
-#🔧 Add this RIGHT AFTER loading df_all
-def clean_zip_codes(df):
+# -------------------
+# ZIP CLEANING
+# -------------------
+def clean_zip(df):
     df = df.copy()
-
-    # Convert to string
-    df["zip_code"] = df["zip_code"].astype(str)
-
-    # Remove spaces and decimals (e.g., '94110.0')
-    df["zip_code"] = df["zip_code"].str.strip().str.replace(r"\.0$", "", regex=True)
-
-    # Keep only 5-digit numeric ZIPs
-    df = df[df["zip_code"].str.match(r"^\d{5}$")]
-
-    # Keep only SF ZIP codes (94XXX)
-    df = df[df["zip_code"].str.startswith("94")]
-
+    df["zip_code"] = (
+        df["zip_code"]
+        .astype(str)
+        .str.strip()
+        .str.replace(r"\.0$", "", regex=True)
+    )
     return df
 
+df_all = clean_zip(df_all)
+df_active = clean_zip(df_active)
+
+# -------------------
+# SF FILTER
+# -------------------
 SF_ZIPS = {
     "94102","94103","94104","94105","94107","94108","94109","94110",
     "94111","94112","94114","94115","94116","94117","94118","94121",
@@ -85,244 +78,156 @@ SF_ZIPS = {
 }
 
 df_all = df_all[df_all["zip_code"].isin(SF_ZIPS)]
-
-#✅ Apply it:
-#df_all = clean_zip_codes(df_all)
-
-min_date = pd.to_datetime(df_all["sale_date"]).min()
-max_date = pd.to_datetime(df_all["sale_date"]).max()
-
-df_all.reset_index(drop=True, inplace=True)
+df_active = df_active[df_active["zip_code"].isin(SF_ZIPS)]
 
 if df_all.empty:
-    st.warning("No data")
+    st.warning("No historical data")
     st.stop()
 
 # -------------------
-# LOCATION FILTERS
+# ZIP SELECTOR (ONLY ONCE)
 # -------------------
 zip_codes = sorted(df_all["zip_code"].dropna().unique())
 
 selected_zip = st.sidebar.selectbox(
     "Select ZIP Code",
-    ["ALL"] + list(zip_codes)
+    ["ALL"] + list(zip_codes),
+    key="zip_filter"
 )
 
 # -------------------
-# DATASETS (CRITICAL SEPARATION)
+# DATASETS
 # -------------------
-
-# CITY (NEVER FILTERED)
 df_city = df_all.copy()
-
-# FILTERED (USER SELECTION ONLY)
 df_filtered = df_all.copy()
+
+df_active_city = df_active.copy()
+df_active_filtered = df_active.copy()
 
 if selected_zip != "ALL":
     df_filtered = df_filtered[df_filtered["zip_code"] == selected_zip]
+    df_active_filtered = df_active_filtered[df_active_filtered["zip_code"] == selected_zip]
 
 # -------------------
-# CLEAN DATA (IMPORTANT FOR PPSF)
+# CLEAN DATA
 # -------------------
-
 def clean_data(df):
     df = df.copy()
-
     df["sqft"] = pd.to_numeric(df["sqft"], errors="coerce")
     df["sale_price"] = pd.to_numeric(df["sale_price"], errors="coerce")
 
-    df = df[
-        df["sqft"].notnull() &
-        df["sale_price"].notnull() &
+    return df[
+        df["sqft"].notna() &
+        df["sale_price"].notna() &
         (df["sqft"] > 500) &
-        (df["sqft"] < 6000) &
-        (df["sale_price"] > 100000) &
-        (df["sale_price"] < 10000000)
+        (df["sqft"] < 6000)
     ]
-
-    return df
 
 df_city = clean_data(df_city)
 df_filtered = clean_data(df_filtered)
 
 # -------------------
-# FEATURES (STRICT SEPARATION)
+# FEATURES
 # -------------------
-
-df_city = df_city.copy()
-df_filtered = df_filtered.copy()
-
-# CITY
-df_city["ppsf"] = df_city["sale_price"] / df_city["sqft"]
-df_city["diff"] = df_city["sale_price"] - df_city["list_price"]
-df_city["over_asking_pct"] = (
-    (df_city["sale_price"] - df_city["list_price"]) /
-    df_city["list_price"]
-)
-
-# FILTERED
-df_filtered["ppsf"] = df_filtered["sale_price"] / df_filtered["sqft"]
-df_filtered["diff"] = df_filtered["sale_price"] - df_filtered["list_price"]
-df_filtered["over_asking_pct"] = (
-    (df_filtered["sale_price"] - df_filtered["list_price"]) /
-    df_filtered["list_price"]
-)
-
-df_city = df_city[
-    (df_city["list_price"] > 100000) &
-    (df_city["sale_price"] > 100000)
-]
-
-df_filtered = df_filtered[
-    (df_filtered["list_price"] > 100000) &
-    (df_filtered["sale_price"] > 100000)
-]
-
-
-
-df_city = df_city[
-    (df_city["over_asking_pct"] > -0.5) &
-    (df_city["over_asking_pct"] < 0.5)
-]
-
-df_filtered = df_filtered[
-    (df_filtered["over_asking_pct"] > -0.5) &
-    (df_filtered["over_asking_pct"] < 0.5)
-]
+for df in [df_city, df_filtered]:
+    df["ppsf"] = df["sale_price"] / df["sqft"]
+    df["diff"] = df["sale_price"] - df["list_price"]
+    df["over_asking_pct"] = (
+        (df["sale_price"] - df["list_price"]) / df["list_price"]
+    )
 
 # -------------------
 # KPIs
-# -------------------
-#col1, col2, col3, col4 = st.columns(4)
-
-
-# -------------------
-# CITY KPIs (STATIC)
 # -------------------
 st.subheader("🌉 San Francisco — Citywide")
 
 col1, col2, col3, col4 = st.columns(4)
 
-city_ppsf = df_city["ppsf"].mean()
-filtered_ppsf = df_filtered["ppsf"].mean()
-
 col1.metric("Median Price", f"${df_city['sale_price'].median():,.0f}")
 col2.metric("Avg Price", f"${df_city['sale_price'].mean():,.0f}")
-col3.metric("Avg PPSF", f"${city_ppsf:,.0f}")
-#city_over_asking = (
-#    (df_city["sale_price"].sum() - df_city["list_price"].sum())
-#    / df_city["list_price"].sum()
-#)
+col3.metric("Avg PPSF", f"${df_city['ppsf'].mean():,.0f}")
 
-#col4.metric(
-#    "% Over Asking",
-#    f"{city_over_asking * 100:.1f}%"
-#)
-
-city_over_asking = (
+city_over = (
     df_city["sale_price"].sum() /
     df_city["list_price"].sum()
 ) - 1
 
-col4.metric("% Over Asking", f"{city_over_asking*100:.1f}%")
+col4.metric("% Over Asking", f"{city_over*100:.1f}%")
 
 # -------------------
-# FILTERED KPIs (DYNAMIC)
+# SELECTED AREA
 # -------------------
 st.subheader(f"📍 Selected Area: {selected_zip}")
 
 if not df_filtered.empty:
-
     col1, col2, col3, col4 = st.columns(4)
-
-    #filtered_ppsf = df_filtered["sale_price"].sum() / df_filtered["sqft"].sum()
 
     col1.metric("Median Price", f"${df_filtered['sale_price'].median():,.0f}")
     col2.metric("Avg Price", f"${df_filtered['sale_price'].mean():,.0f}")
-    col3.metric("Avg PPSF", f"${filtered_ppsf:,.0f}")
-    filtered_over_asking = (
-    (df_filtered["sale_price"].sum() - df_filtered["list_price"].sum())
-    / df_filtered["list_price"].sum()
-    )
+    col3.metric("Avg PPSF", f"${df_filtered['ppsf'].mean():,.0f}")
 
-    col4.metric(
-    "% Over Asking",
-    f"{filtered_over_asking * 100:.1f}%"
-    )
-else:
-    st.warning("No data for selected ZIP")
+    filtered_over = (
+        df_filtered["sale_price"].sum() /
+        df_filtered["list_price"].sum()
+    ) - 1
 
+    col4.metric("% Over Asking", f"{filtered_over*100:.1f}%")
 
+# ==================================================
+# MARKET SIGNAL
+# ==================================================
 st.markdown("### 🧠 Market Signal Engine")
 
-if selected_zip == "ALL":
-    signal_df = df_city
-    signal_scope = "San Francisco"
-else:
-    signal_df = df_filtered
-    signal_scope = f"ZIP {selected_zip}"
+signal_df = df_city if selected_zip == "ALL" else df_filtered
+active_df = df_active_city if selected_zip == "ALL" else df_active_filtered
 
-signal = compute_market_signal(signal_df)
+signal = compute_market_signal(signal_df, active_df)
 
 label = signal["label"]
-confidence = signal["confidence"]
-c = signal["components"]
-
-st.caption(
-    f"Market conditions for {signal_scope} "
-    f"based on {c['transactions']:,} transactions"
-)
+score = signal["confidence"]
 
 if label == "SELLER":
-    st.success(
-        f"🔥 SELLER MARKET — Confidence: {confidence}%"
-    )
-
+    st.success(f"🔥 SELLER MARKET — {score}/100")
 elif label == "BALANCED":
-    st.info(
-        f"⚖️ BALANCED MARKET — Confidence: {confidence}%"
-    )
-
-elif label == "BUYER":
-    st.warning(
-        f"📉 BUYER MARKET — Confidence: {confidence}%"
-    )
-
+    st.info(f"⚖️ BALANCED MARKET — {score}/100")
 else:
-    st.warning("Insufficient data to calculate market signal")
+    st.warning(f"📉 BUYER MARKET — {score}/100")
 
+# ==================================================
+# OPPORTUNITY ENGINE (RIGHT PLACE)
+# ==================================================
+st.markdown("### 🚀 Opportunity Engine")
 
-# -------------------
-# SIGNAL DRIVERS
-# -------------------
+df_opportunities = compute_opportunity_engine(active_df, signal_df)
 
-col1, col2, col3 = st.columns(3)
+st.caption(f"Top opportunities: {len(df_opportunities):,}")
 
-with col1:
-    st.metric(
-        "Over Asking",
-        f"{c['over_asking'] * 100:.1f}%"
+if not df_opportunities.empty:
+
+    df_display = (
+        df_opportunities
+        .sort_values("opportunity_score", ascending=False)
+        .head(20)
     )
 
-with col2:
-    st.metric(
-        "Transactions",
-        f"{c['transactions']:,}"
+    st.dataframe(
+        df_display[[
+            "address",
+            "zip_code",
+            "property_type",
+            "list_price",
+            "list_ppsf",
+            "estimated_value",
+            "discount_pct",
+            "opportunity_score"
+        ]],
+        use_container_width=True,
+        hide_index=True
     )
 
-with col3:
-    st.metric(
-        "Signal Score",
-        f"{c['score'] * 100:.0f}/100"
-    )
-
-
-
-
-
-# -------------------
+# ==================================================
 # MAP
-# -------------------
+# ==================================================
 st.subheader("Sales Map")
 
 df_map = df_filtered.sample(min(len(df_filtered), 3000))
@@ -333,89 +238,120 @@ fig_map = px.scatter_mapbox(
     lon="longitude",
     color="sale_price",
     size="sale_price",
-    hover_name="full_address",
-    hover_data=["zip_code", "sale_price"],
     zoom=11
 )
 
-if selected_zip != "ALL":
-    df_highlight = df_filtered.copy()
-
-    fig_map.add_scattermapbox(
-        lat=df_highlight["latitude"],
-        lon=df_highlight["longitude"],
-        mode="markers",
-        marker=dict(size=10, color="red"),
-        name="Selected ZIP"
-    )
-
 fig_map.update_layout(mapbox_style="open-street-map")
 
-st.plotly_chart(fig_map, use_container_width=True, key="main_map")
-
-
+st.plotly_chart(fig_map, use_container_width=True)
 
 # -------------------
 # CHARTS
 # -------------------
 col1, col2 = st.columns(2)
 
-
 with col1:
-    fig1 = px.histogram(df_filtered, x="sale_price")
-    st.plotly_chart(fig1, use_container_width=True, key="price_hist")
+    fig1 = px.histogram(
+        df_filtered,
+        x="sale_price",
+        title="Distribution of Sale Prices"
+    )
+    st.plotly_chart(fig1, use_container_width=True)
 
 with col2:
-    fig2 = px.histogram(df_filtered, x="diff")
-    st.plotly_chart(fig2, use_container_width=True, key="diff_hist")
+    fig2 = px.histogram(
+        df_filtered,
+        x="diff",
+        title="Sale vs List Price Difference"
+    )
+    st.plotly_chart(fig2, use_container_width=True)
 
 # -------------------
 # TREND
 # -------------------
+st.subheader("📈 Price Trend")
 
-monthly = df_filtered.groupby("month")["sale_price"].median().reset_index()
+monthly = (
+    df_filtered
+    .groupby("month")["sale_price"]
+    .median()
+    .reset_index()
+)
 
-fig3 = px.line(monthly, x="month", y="sale_price")
+fig3 = px.line(
+    monthly,
+    x="month",
+    y="sale_price",
+    title="Median Price Over Time"
+)
+
 st.plotly_chart(fig3, use_container_width=True)
-
 
 # -------------------
 # PRICE SEGMENTS
 # -------------------
-st.subheader("Price Segments")
+st.subheader("📦 Price Segments")
 
 bins = [0, 1e6, 2e6, 5e6, 10e6, 1e9]
 labels = ["<1M", "1-2M", "2-5M", "5-10M", "10M+"]
 
-df_filtered["bucket"] = pd.cut(df_filtered["sale_price"], bins=bins, labels=labels)
-st.bar_chart(df_filtered["bucket"].value_counts().sort_index())
+df_filtered["bucket"] = pd.cut(
+    df_filtered["sale_price"],
+    bins=bins,
+    labels=labels
+)
 
-
-# -------------------
-# TABLE
-# -------------------
-st.subheader("Recent Sales")
-
-# -------------------
-# PREP DISPLAY
-# -------------------
-display_cols = ["full_address", "sale_price", "list_price", "diff", "sqft", "ppsf", "sale_date"]
-
-df_display = df_filtered[display_cols].copy()
-
-# ✅ SORT FIRST (numeric)
-df_display = df_display.sort_values(by="diff", ascending=False)
+st.bar_chart(
+    df_filtered["bucket"]
+    .value_counts()
+    .sort_index()
+)
 
 # -------------------
-# FORMATTING (after sorting)
+# RECENT SALES
 # -------------------
-df_display["sale_price"] = df_display["sale_price"].map(lambda x: f"${x:,.0f}")
-df_display["list_price"] = df_display["list_price"].map(lambda x: f"${x:,.0f}")
-df_display["diff"] = df_display["diff"].map(lambda x: f"${x:,.0f}")
-df_display["sqft"] = df_display["sqft"].map(lambda x: f"{int(x):,}")
-df_display["ppsf"] = df_display["ppsf"].map(lambda x: f"${x:,.0f}")
+st.subheader("📋 Recent Sales")
+
+display_cols = [
+    "full_address",
+    "sale_price",
+    "list_price",
+    "diff",
+    "sqft",
+    "ppsf",
+    "sale_date"
+]
+
+available_cols = [
+    c for c in display_cols if c in df_filtered.columns
+]
+
+df_display = df_filtered[available_cols].copy()
+
+# Sort BEFORE formatting
+df_display = df_display.sort_values(
+    by="diff",
+    ascending=False
+)
+
+# Formatting
+if "sale_price" in df_display:
+    df_display["sale_price"] = df_display["sale_price"].map(lambda x: f"${x:,.0f}")
+
+if "list_price" in df_display:
+    df_display["list_price"] = df_display["list_price"].map(lambda x: f"${x:,.0f}")
+
+if "diff" in df_display:
+    df_display["diff"] = df_display["diff"].map(lambda x: f"${x:,.0f}")
+
+if "sqft" in df_display:
+    df_display["sqft"] = df_display["sqft"].map(lambda x: f"{int(x):,}")
+
+if "ppsf" in df_display:
+    df_display["ppsf"] = df_display["ppsf"].map(lambda x: f"${x:,.0f}")
 
 st.dataframe(
     df_display,
-    use_container_width=True
+    use_container_width=True,
+    height=400
 )
