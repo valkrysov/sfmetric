@@ -130,7 +130,13 @@ def load_active_listings(engine, property_type=None):
         p.garage_spaces,
         p.fireplaces,
         p.hoa_fee,
-        p.view
+        p.view,
+
+        CASE 
+            WHEN p.unit_number IS NOT NULL 
+            THEN p.address || ' #' || p.unit_number
+            ELSE p.address
+        END AS full_address
 
     FROM active_listings a
 
@@ -139,7 +145,6 @@ def load_active_listings(engine, property_type=None):
 
     WHERE UPPER(TRIM(a.status)) = 'ACTIVE'
     """
-
     params = []
 
     if property_type:
@@ -156,6 +161,22 @@ def load_active_listings(engine, property_type=None):
 
     if df.empty:
         return df
+
+    # -----------------------------------------------------
+    # DEDUPE: keep only the most recent listing per property.
+    # Source data can contain multiple snapshot rows per
+    # listing (e.g. price-change history), which otherwise
+    # shows the same address multiple times downstream.
+    # -----------------------------------------------------
+    if "property_id" in df.columns and "listing_date" in df.columns:
+        df["listing_date"] = pd.to_datetime(df["listing_date"], errors="coerce")
+        df = (
+            df.sort_values("listing_date", ascending=False)
+              .drop_duplicates(subset="property_id", keep="first")
+              .reset_index(drop=True)
+        )
+
+
 
     # Numeric cleanup
     df["list_price"] = pd.to_numeric(

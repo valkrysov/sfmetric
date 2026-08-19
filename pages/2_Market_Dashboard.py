@@ -379,7 +379,7 @@ else:
     # --------------------------------------------------
 
     opportunity_cols = [
-        "address",
+        "full_address",
         "zip_code",
         "property_type",
         "list_price",
@@ -417,7 +417,7 @@ else:
 
     display = display.rename(
         columns={
-            "address": "Property",
+            "full_address": "Property",
             "zip_code": "ZIP",
             "property_type": "Type",
             "list_price": "List Price",
@@ -470,10 +470,25 @@ else:
     # OPPORTUNITY TABLE
     # --------------------------------------------------
 
+    st.caption("👉 Click a property to open full details")
+
+    # Build a per-row link to the Property Intelligence page, carrying
+    # the property_id as a query parameter.
+    display["Open"] = (
+        "/Property_Intelligence?property_id="
+        + df_display_opportunities["property_id"].astype(str)
+    )
+
     st.dataframe(
         display,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        column_config={
+            "Open": st.column_config.LinkColumn(
+                "Open",
+                display_text="View details →"
+            )
+        }
     )
 
 

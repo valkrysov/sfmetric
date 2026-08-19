@@ -5,19 +5,21 @@ import numpy as np
 # SUBJECT
 # -------------------
 def get_subject(property_id, engine):
-    property_id = str(property_id).replace("APN_", "").strip()
-
-    query = """
-    
+    property_id = str(property_id).strip()   # ✅ no more .replace("APN_", "")
+    ...
+    # -----------------------------------------------------
+    # 1) TRY HISTORICAL SALE FIRST
+    # -----------------------------------------------------
+    query_sold = """
     SELECT 
-    p.*,
-    t.sale_price,
-    t.sale_date,
-    CASE 
-        WHEN p.unit_number IS NOT NULL 
-        THEN p.address || ' #' || p.unit_number
-        ELSE p.address
-    END AS full_address
+        p.*,
+        t.sale_price,
+        t.sale_date,
+        CASE 
+            WHEN p.unit_number IS NOT NULL 
+            THEN p.address || ' #' || p.unit_number
+            ELSE p.address
+        END AS full_address
     FROM properties p
     JOIN transactions t ON p.property_id = t.property_id
     WHERE p.property_id = %s
@@ -25,18 +27,49 @@ def get_subject(property_id, engine):
     LIMIT 1
     """
 
-    df = pd.read_sql(query, engine, params=(property_id,))  # ✅ FIXED
+    df = pd.read_sql(query_sold, engine, params=(property_id,))
 
-    if df.empty:
+    if not df.empty:
+        subject = df.iloc[0].copy()
+        subject["is_active_listing"] = False
+        return subject
+
+    # -----------------------------------------------------
+    # 2) FALL BACK TO ACTIVE LISTING (no prior sale on record)
+    # -----------------------------------------------------
+    query_active = """
+    SELECT 
+        p.*,
+        a.list_price,
+        a.listing_date,
+        CASE 
+            WHEN p.unit_number IS NOT NULL 
+            THEN p.address || ' #' || p.unit_number
+            ELSE p.address
+        END AS full_address
+    FROM properties p
+    JOIN active_listings a ON p.property_id = a.property_id
+    WHERE p.property_id = %s
+    ORDER BY a.listing_date DESC
+    LIMIT 1
+    """
+
+    df_active = pd.read_sql(query_active, engine, params=(property_id,))
+
+    if df_active.empty:
         return None
-    return df.iloc[0]   # ✅ nothing else needed
-  
+
+    subject = df_active.iloc[0].copy()
+    subject["sale_price"] = subject["list_price"]      # use list price as reference
+    subject["sale_date"] = subject["listing_date"]      # use listing date as reference
+    subject["is_active_listing"] = True
+    return subject  
 # -------------------
 # COMPARABLES
 # -------------------
 def get_comparables(property_id, engine):
-    property_id = str(property_id).replace("APN_", "").strip()
-
+    property_id = str(property_id).strip()   # ✅ no more .replace("APN_", "")
+    ...
     query = """
     
     SELECT 

@@ -26,23 +26,54 @@ engine = get_engine()
 # 🆕 ADD HELPER HERE 👇
 # =========================
 
+def _exact_property_id_match(candidate, engine):
+    """
+    Look up a candidate string against both properties and active_listings,
+    tolerant of case and stray whitespace (common in multi-batch CSV loads).
+    Returns the CANONICAL value as actually stored in the DB.
+    """
+    query = """
+    SELECT property_id FROM properties
+    WHERE UPPER(TRIM(property_id)) = UPPER(TRIM(%s))
+    UNION
+    SELECT property_id FROM active_listings
+    WHERE UPPER(TRIM(property_id)) = UPPER(TRIM(%s))
+    LIMIT 1
+    """
+    df = pd.read_sql(query, engine, params=(candidate, candidate))
+    if df.empty:
+        return None
+    return df.iloc[0]["property_id"]
+
 def resolve_property_id(input_value, engine):
     input_value = input_value.strip()
 
-    # -----------------------
-    # APN CASE
-    # -----------------------
-    if "-" in input_value and input_value.replace("APN_", "").replace("-", "").isdigit():
-        return input_value.replace("APN_", "")
+    # -----------------------------------------------------
+    # 1) EXACT MATCH FIRST — handles canonical IDs untouched
+    #    (e.g. "APN_7159-012", "ADDR_960 MARKET STREET_94102")
+    #    This is what click-throughs from the Opportunity
+    #    Engine / Market Dashboard always send.
+    # -----------------------------------------------------
+    exact = _exact_property_id_match(input_value, engine)
+    if exact is not None:
+        return exact
 
-    # -----------------------
-    # ADDRESS + UNIT PARSING
-    # -----------------------
-    # Examples handled:
-    # "2045 Green St #3"
-    # "2045 Green St Unit 3"
-    # "2045 Green St Apt 3"
+    # -----------------------------------------------------
+    # 2) TRY APN VARIANTS (with / without "APN_" prefix)
+    #    Handles inconsistent prefixing between tables and
+    #    users manually typing "3627-025" or "APN_3627-025".
+    # -----------------------------------------------------
+    stripped = input_value.replace("APN_", "").strip()
 
+    if "-" in stripped and stripped.replace("-", "").isdigit():
+        for candidate in (stripped, f"APN_{stripped}"):
+            match = _exact_property_id_match(candidate, engine)
+            if match is not None:
+                return match
+
+    # -----------------------------------------------------
+    # 3) FUZZY ADDRESS SEARCH (fallback for free-typed input)
+    # -----------------------------------------------------
     unit_match = re.search(r"(#|unit|apt)\s*([A-Za-z0-9\-]+)", input_value, re.IGNORECASE)
 
     unit = None
@@ -52,9 +83,6 @@ def resolve_property_id(input_value, engine):
         unit = unit_match.group(2)
         base_address = re.sub(r"(#|unit|apt)\s*[A-Za-z0-9\-]+", "", input_value, flags=re.IGNORECASE).strip()
 
-    # -----------------------
-    # QUERY
-    # -----------------------
     if unit:
         query = """
         SELECT property_id
@@ -63,9 +91,7 @@ def resolve_property_id(input_value, engine):
         AND CAST(unit_number AS TEXT) ILIKE %s
         LIMIT 1
         """
-
         params = (f"%{base_address}%", f"%{unit}%")
-
     else:
         query = """
         SELECT property_id
@@ -73,7 +99,6 @@ def resolve_property_id(input_value, engine):
         WHERE LOWER(address) LIKE LOWER(%s)
         LIMIT 1
         """
-
         params = (f"%{base_address}%",)
 
     df = pd.read_sql(query, engine, params=params)
@@ -82,6 +107,7 @@ def resolve_property_id(input_value, engine):
         return None
 
     return df.iloc[0]["property_id"]
+
 # =========================
 # 📦 IMPORT YOUR FUNCTIONS
 # =========================
@@ -131,10 +157,6 @@ def plot_comps_map(subject, comps):
 # =========================
 # 🎯 UI CONFIG
 # =========================
-#st.set_page_config(
-#    page_title="SF Housing Intelligence",
-#    layout="wide"
-#)
 
 st.markdown("""
 <style>
@@ -167,11 +189,36 @@ st.markdown("AI-powered valuation for San Francisco properties")
 # =========================
 # 🔍 INPUT
 # =========================
+
+# -----------------------
+# INITIALIZE PERSISTENT WIDGET STATE
+# -----------------------
+if "property_id" not in st.session_state:
+    st.session_state.property_id = ""
+
+# -----------------------
+# PRE-FILL FROM OPPORTUNITY ENGINE LINK CLICK (via URL query param)
+# -----------------------
+query_property_id = st.query_params.get("property_id")
+
+if query_property_id:
+    st.session_state.property_id = str(query_property_id)
+    st.session_state.run_analysis = True
+    st.query_params.clear()
+
+# -----------------------
+# PRE-FILL FROM SESSION STATE (kept for backward compatibility)
+# -----------------------
+elif "selected_property_id" in st.session_state:
+    st.session_state.property_id = str(st.session_state.pop("selected_property_id"))
+    st.session_state.run_analysis = True
+
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    property_id = st.text_input(
+    st.text_input(
         "Enter APN or Address",
+        key="property_id",
         placeholder="e.g. 3627-025 or APN_3627-025 or 2760 19th Avenue"
     )
 
@@ -181,6 +228,9 @@ with col2:
 
     if st.button("Analyze"):
         st.session_state.run_analysis = True
+
+property_id = st.session_state.property_id
+
 
 # =========================
 # 🚀 MAIN LOGIC
