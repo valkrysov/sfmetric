@@ -8,6 +8,7 @@ import folium
 from streamlit_folium import st_folium
 
 from your_module import get_subject, get_ranked_comps, get_comparables
+from market_data import get_property_sales_history, get_neighborhood_stats
 
 st.set_page_config(
     page_title="SF Housing Intelligence",
@@ -372,7 +373,134 @@ if st.session_state.run_analysis and property_id:
     comps_display = comps_display.astype(str)
 
     st.dataframe(comps_display, use_container_width=True)
+    # =========================
+    # 📜 HISTORICAL SALES (this property)
+    # =========================
+    st.subheader("Historical Sales")
 
+    sales_history = get_property_sales_history(property_id, engine)
+
+    if sales_history.empty:
+        st.info("No prior sales on record for this property — it appears to be new to market.")
+    else:
+        hist_display = sales_history.copy()
+        hist_display["sale_date"] = hist_display["sale_date"].dt.strftime("%Y-%m-%d")
+        hist_display["sale_price"] = hist_display["sale_price"].map(
+            lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A"
+        )
+        hist_display["list_price"] = hist_display["list_price"].map(
+            lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A"
+        )
+        hist_display = hist_display.rename(columns={
+            "sale_date": "Sale Date",
+            "sale_price": "Sale Price",
+            "list_price": "List Price",
+            "days_on_market": "DOM"
+        })
+        st.dataframe(hist_display, use_container_width=True, hide_index=True)
+
+    # =========================
+    # 🏘️ NEIGHBORHOOD STATISTICS
+    # =========================
+    st.subheader("Neighborhood Statistics")
+
+    neighborhood_stats = get_neighborhood_stats(
+        subject["zip_code"],
+        subject["property_type"],
+        engine
+    )
+
+    if neighborhood_stats is None:
+        st.info("Not enough recent sales in this ZIP code to compute neighborhood statistics.")
+    else:
+        n1, n2, n3, n4 = st.columns(4)
+
+        n1.metric("Median Sale Price", f"${neighborhood_stats['median_price']:,.0f}")
+        n2.metric("Avg PPSF", f"${neighborhood_stats['avg_ppsf']:,.0f}")
+        n3.metric("% Sold Over Asking", f"{neighborhood_stats['pct_over_asking']*100:.0f}%")
+        n4.metric("Sales (24mo)", f"{int(neighborhood_stats['sale_count']):,}")
+
+    # =========================
+    # 🤖 AI OPPORTUNITY EXPLANATION
+    # =========================
+    st.subheader("🤖 Why This Is (or Isn't) an Opportunity")
+
+    # ---- Compute the comparison metrics we already have ----
+    comps_ppsf_median = comps["ppsf"].median() if "ppsf" in comps.columns and not comps.empty else None
+    subject_sqft = subject.get("sqft")
+    subject_ppsf = (
+        subject["sale_price"] / subject_sqft
+        if pd.notna(subject.get("sale_price")) and pd.notna(subject_sqft) and subject_sqft > 0
+        else None
+    )
+
+    price_discount_pct = (
+        (median - subject["sale_price"]) / median
+        if median and median > 0 and pd.notna(subject["sale_price"])
+        else None
+)
+
+    ppsf_discount_pct = (
+        (comps_ppsf_median - subject_ppsf) / comps_ppsf_median
+        if comps_ppsf_median and subject_ppsf
+        else None
+    )
+
+    dom = subject.get("days_on_market")
+    dom = int(dom) if pd.notna(dom) else None
+
+    # ---- Build the explanation sentence by sentence ----
+    explanation_parts = []
+
+    if price_discount_pct is not None:
+        if price_discount_pct > 0.03:
+            explanation_parts.append(
+                f"Asking price is approximately {price_discount_pct*100:.1f}% below the "
+                f"estimated neighborhood-adjusted value, based on {len(comps)} comparable "
+                f"recent sales."
+            )
+        elif price_discount_pct < -0.03:
+            explanation_parts.append(
+                f"Asking price is approximately {abs(price_discount_pct)*100:.1f}% above the "
+                f"estimated neighborhood-adjusted value based on comparable sales."
+            )
+        else:
+            explanation_parts.append(
+                "Asking price is roughly in line with the estimated neighborhood-adjusted value."
+            )
+
+    if ppsf_discount_pct is not None:
+        if ppsf_discount_pct > 0.03:
+            explanation_parts.append(
+                f"The property is also priced {ppsf_discount_pct*100:.1f}% below the median "
+                f"price-per-square-foot of comparable properties."
+            )
+        elif ppsf_discount_pct < -0.03:
+            explanation_parts.append(
+                f"However, its price per square foot runs {abs(ppsf_discount_pct)*100:.1f}% "
+                f"above comparable properties."
+            )
+
+    if neighborhood_stats is not None and pd.notna(neighborhood_stats["pct_over_asking"]):
+        pct_over = neighborhood_stats["pct_over_asking"]
+        if pct_over > 0.5:
+            explanation_parts.append(
+                f"Despite this, {pct_over*100:.0f}% of comparable homes in this ZIP code have "
+                f"recently sold above asking, suggesting a potential pricing inefficiency."
+            )
+        else:
+            explanation_parts.append(
+                f"Only {pct_over*100:.0f}% of comparable homes in this ZIP code have recently "
+                f"sold above asking, consistent with a more balanced or buyer-favorable market."
+            )
+
+    if dom is not None:
+        explanation_parts.append(f"This property has been on the market for {dom} days.")
+
+    if explanation_parts:
+        st.markdown(" ".join(explanation_parts))
+    else:
+        st.info("Not enough data available to generate an opportunity explanation.")
 # =========================
 # FOOTER
 # =========================

@@ -1020,3 +1020,72 @@ def compute_opportunity_engine(df_active, df_history):
     )
 
     return opportunities
+
+
+#============================================================
+#PROPERTY SALES HISTORY (single property)
+#============================================================
+
+def get_property_sales_history(property_id, engine):
+    """
+    All historical transactions for one specific property_id,
+    most recent first.
+    """
+    query = """
+    SELECT
+        sale_date,
+        sale_price,
+        list_price,
+        days_on_market
+    FROM transactions
+    WHERE property_id = %s
+    ORDER BY sale_date DESC
+    """
+
+    df = pd.read_sql(query, engine, params=(property_id,))
+
+    if df.empty:
+        return df
+
+    df["sale_date"] = pd.to_datetime(df["sale_date"], errors="coerce")
+    df["sale_price"] = pd.to_numeric(df["sale_price"], errors="coerce")
+    df["list_price"] = pd.to_numeric(df["list_price"], errors="coerce")
+
+    return df
+
+
+#============================================================
+#NEIGHBORHOOD STATISTICS (ZIP + property type, last 24 months)
+#============================================================
+
+def get_neighborhood_stats(zip_code, property_type, engine):
+    """
+    Aggregate market stats for a ZIP code + property type,
+    computed directly in SQL (no large dataframe pulled into Python).
+    Returns a single pandas Series, or None if no data.
+    """
+    query = """
+    SELECT
+        COUNT(*) AS sale_count,
+        AVG(t.sale_price) AS avg_price,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY t.sale_price) AS median_price,
+        AVG(t.sale_price / NULLIF(p.sqft, 0)) AS avg_ppsf,
+        AVG(
+            CASE WHEN t.sale_price > t.list_price THEN 1.0 ELSE 0.0 END
+        ) AS pct_over_asking,
+        AVG(t.days_on_market) AS avg_dom
+    FROM transactions t
+    JOIN properties p ON t.property_id = p.property_id
+    WHERE p.zip_code = %s
+      AND p.property_type = %s
+      AND t.sale_date >= CURRENT_DATE - INTERVAL '24 months'
+      AND t.sale_price IS NOT NULL
+      AND t.list_price IS NOT NULL
+    """
+
+    df = pd.read_sql(query, engine, params=(zip_code, property_type))
+
+    if df.empty or pd.isna(df.iloc[0]["sale_count"]) or df.iloc[0]["sale_count"] == 0:
+        return None
+
+    return df.iloc[0]

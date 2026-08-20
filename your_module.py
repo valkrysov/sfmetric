@@ -15,6 +15,7 @@ def get_subject(property_id, engine):
         p.*,
         t.sale_price,
         t.sale_date,
+        t.days_on_market,
         CASE 
             WHEN p.unit_number IS NOT NULL 
             THEN p.address || ' #' || p.unit_number
@@ -42,6 +43,7 @@ def get_subject(property_id, engine):
         p.*,
         a.list_price,
         a.listing_date,
+        a.days_on_market,
         CASE 
             WHEN p.unit_number IS NOT NULL 
             THEN p.address || ' #' || p.unit_number
