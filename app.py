@@ -72,13 +72,9 @@ property_type = st.sidebar.selectbox(
 # CORE QUERY FUNCTION
 # ==========================================
 
-#@st.cache_data(ttl=60)
-#def run_query(query, params=None):
-#    return pd.read_sql(query, conn, params=params)
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=3600)  # 1 hour — your data only refreshes monthly anyway
 def run_query(query, params=None):
     return pd.read_sql(query, engine, params=params)
-
 
 # ==========================================
 # 1. INVENTORY BY NEIGHBORHOOD
