@@ -237,10 +237,11 @@ SELECT
 FROM sf_neighborhoods n
 
 LEFT JOIN properties p
-    ON ST_Contains(n.geom, p.geom)
+    ON p.neighborhood = n.nhood
 
 LEFT JOIN active_listings a
     ON p.property_id = a.property_id
+    AND UPPER(TRIM(a.status)) = 'ACTIVE'
 
 GROUP BY n.nhood
 """)
