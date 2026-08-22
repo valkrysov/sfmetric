@@ -8,4 +8,3 @@ def get_engine():
         pool_pre_ping=True,
         pool_recycle=300,
     )
-    )
