@@ -31,7 +31,7 @@ st.set_page_config(
 # ==========================================
 
 engine = get_engine()
-st.sidebar.caption(f"🔌 DB host: {engine.url.host}")
+
 
 #@st.cache_resource
 #def get_connection():
