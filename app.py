@@ -13,18 +13,9 @@ from db import get_engine
 # CONFIG
 # ==========================================
 
-st.set_page_config(
-    page_title="SF Housing Intelligence",
-    layout="wide"
-)
+from theme import inject_theme, render_page_header, render_section
 
-#DB_CONFIG = {
-#    "dbname": "sfmetric",
-#    "user": "postgres",
-#    "password": "Main&3&One",
-#    "host": "localhost",
-#    "port": "5433"
-#}
+inject_theme(page_title="Overview", page_icon="🏙️")
 
 # ==========================================
 # DB CONNECTION
@@ -32,21 +23,7 @@ st.set_page_config(
 
 engine = get_engine()
 
-
-#@st.cache_resource
-#def get_connection():
-#    return psycopg2.connect(**DB_CONFIG)
-
-#conn = get_connection()
-
-# ==========================================
-# HEADER
-# ==========================================
-
-st.title("🏙️ SF Housing Intelligence")
-st.markdown("Live Real Estate Analytics — San Francisco")
-
-
+render_page_header("SF Housing Intelligence", "Live Real Estate Analytics — San Francisco")
 # ==========================================
 # 🔥 FILTERS (ADD HERE)
 # ==========================================
@@ -81,7 +58,7 @@ def run_query(query, params=None):
 # 1. INVENTORY BY NEIGHBORHOOD
 # ==========================================
 
-st.subheader("📊 Inventory by Neighborhood")
+render_section("Inventory by Neighborhood", accent="#2563EB")
 
 df_inventory = run_query("""
 SELECT
@@ -114,7 +91,7 @@ st.plotly_chart(
 # 2. PRICE PER SQFT
 # ==========================================
 
-st.subheader("💰 Price per SqFt (Live)")
+render_section("Price per SqFt (Live)", accent="#2563EB")
 
 df_psf = run_query("""
 SELECT
@@ -147,7 +124,7 @@ st.plotly_chart(
 # 3. DAYS ON MARKET (DOM)
 # ==========================================
 
-st.subheader("🔥 Days on Market (Heat Indicator)")
+render_section("Days on Market (Heat Indicator)", caption="Higher values suggest a slower-moving market", accent="#B54708")
 
 df_dom = run_query("""
 SELECT
@@ -179,7 +156,7 @@ st.plotly_chart(
 # 4. NEW LISTINGS TREND
 # ==========================================
 
-st.subheader("📈 New Listings Trend")
+render_section("New Listings Trend", accent="#2563EB")
 
 df_trend = run_query("""
 SELECT
@@ -210,7 +187,7 @@ st.plotly_chart(
 # 🗺️ NEIGHBORHOOD INTELLIGENCE MAP
 # ==========================================
 
-st.subheader("🧠 Neighborhood Intelligence Map")
+render_section("Neighborhood Intelligence Map", accent="#2563EB")
 
 # Metric selector
 metric = st.selectbox(
@@ -311,7 +288,7 @@ st.plotly_chart(
 # 5. 🔥 OPPORTUNITY INTELLIGENCE (WOW FEATURE)
 # ==========================================
 
-st.subheader("🚀 Underpriced Listings (Opportunity Engine)")
+render_section("Underpriced Listings (Opportunity Engine)", accent="#099250")
 
 df_opps = run_query("""
 SELECT
@@ -346,13 +323,13 @@ df_opps["price_psf"] = df_opps["price_psf"].round(0)
 df_opps["neighborhood_avg_psf"] = df_opps["neighborhood_avg_psf"].round(0)
 df_opps["discount_pct"] = (df_opps["discount_pct"] * 100).round(1)
 
-st.dataframe(df_opps)
+st.dataframe(df_opps, use_container_width=True, hide_index=True)
 
 # ==========================================
 # 6. 🗺️ LIVE MAP — ACTIVE LISTINGS
 # ==========================================
 #✅ STEP 1 — Add SQL query (with filters)
-st.subheader("🗺️ Live Listings Map")
+render_section("Live Listings Map", accent="#2563EB")
 
 df_map = run_query("""
 SELECT
