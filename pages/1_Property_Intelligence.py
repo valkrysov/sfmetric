@@ -10,10 +10,9 @@ from streamlit_folium import st_folium
 from your_module import get_subject, get_ranked_comps, get_comparables
 from market_data import get_property_sales_history, get_neighborhood_stats
 
-st.set_page_config(
-    page_title="SF Housing Intelligence",
-    layout="wide"
-)
+from theme import inject_theme, render_page_header, render_section
+
+inject_theme(page_title="Property Intelligence", page_icon="🏡")
 # ALL YOUR EXISTING CODE HERE (unchanged)
 
 # =========================
@@ -155,37 +154,7 @@ def plot_comps_map(subject, comps):
 
     return m
 
-# =========================
-# 🎯 UI CONFIG
-# =========================
-
-st.markdown("""
-<style>
-div.stButton > button {
-    background-color: #0A84FF;
-    color: white;
-    font-size: 18px;
-    font-weight: 600;
-    padding: 0.6em 2em;
-    border-radius: 10px;
-    border: none;
-    transition: all 0.2s ease;
-}
-
-div.stButton > button:hover {
-    background-color: #0066CC;
-    transform: scale(1.02);
-}
-
-div.stButton > button:active {
-    transform: scale(0.98);
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-st.title("🏡 SF Housing Intelligence")
-st.markdown("AI-powered valuation for San Francisco properties")
+render_page_header("Property Intelligence", "AI-powered valuation for San Francisco properties")
 
 # =========================
 # 🔍 INPUT
@@ -294,7 +263,7 @@ if st.session_state.run_analysis and property_id:
     # =========================
     # 🆕 LAST SALE (CORRECT PLACE)
     # =========================
-    st.subheader("Last Transaction")
+    render_section("Last Transaction", accent="#2563EB")
 
     col1, col2 = st.columns(2)
 
@@ -326,7 +295,7 @@ if st.session_state.run_analysis and property_id:
     # =========================
     # 🧾 SUBJECT (CLEAN)
     # =========================
-    st.subheader("Subject Property")
+    render_section("Subject Property", accent="#2563EB")
 
     col1, col2, col3 = st.columns(3)
     
@@ -346,7 +315,7 @@ if st.session_state.run_analysis and property_id:
     # =========================
     # 🗺️ MAP
     # =========================
-    st.subheader("Map")
+    render_section("Map", accent="#2563EB")
 
     try:
         m = plot_comps_map(subject, comps)
@@ -357,7 +326,7 @@ if st.session_state.run_analysis and property_id:
     # =========================
     # 📋 COMPS TABLE
     # =========================
-    st.subheader("Top Comparables")
+    render_section("Top Comparables", accent="#2563EB")
 
     display_cols = ["full_address", "sale_price", "sqft", "distance", "score"]
 
@@ -376,7 +345,7 @@ if st.session_state.run_analysis and property_id:
     # =========================
     # 📜 HISTORICAL SALES (this property)
     # =========================
-    st.subheader("Historical Sales")
+    render_section("Historical Sales", accent="#2563EB")
 
     sales_history = get_property_sales_history(property_id, engine)
 
@@ -402,7 +371,7 @@ if st.session_state.run_analysis and property_id:
     # =========================
     # 🏘️ NEIGHBORHOOD STATISTICS
     # =========================
-    st.subheader("Neighborhood Statistics")
+    render_section("Neighborhood Statistics", accent="#2563EB")
 
     neighborhood_stats = get_neighborhood_stats(
         subject["zip_code"],
@@ -423,7 +392,7 @@ if st.session_state.run_analysis and property_id:
     # =========================
     # 🤖 AI OPPORTUNITY EXPLANATION
     # =========================
-    st.subheader("🤖 Why This Is (or Isn't) an Opportunity")
+    render_section("🤖 Why This Is (or Isn't) an Opportunity", accent="#099250")
 
     # ---- Compute the comparison metrics we already have ----
     comps_ppsf_median = comps["ppsf"].median() if "ppsf" in comps.columns and not comps.empty else None

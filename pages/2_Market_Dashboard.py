@@ -9,8 +9,10 @@ from market_data import (
     compute_market_signal,
     compute_opportunity_engine
 )
+from theme import inject_theme, render_page_header, render_section, render_kpi_row, render_status_banner
 
-st.title("📊 San Francisco Market Dashboard")
+inject_theme(page_title="Market Dashboard", page_icon="📊")
+render_page_header("Market Dashboard", "San Francisco · Live Market Data")
 
 # -------------------
 # DB
@@ -139,60 +141,31 @@ for df in [df_city, df_filtered]:
 # -------------------
 # KPIs
 # -------------------
-st.subheader("🌉 San Francisco — Citywide")
+render_section("San Francisco — Citywide", accent="#2563EB")
 
-col1, col2, col3, col4 = st.columns(4)
+city_over = (df_city["sale_price"].sum() / df_city["list_price"].sum()) - 1
 
-col1.metric("Median Price", f"${df_city['sale_price'].median():,.0f}")
-col2.metric("Avg Price", f"${df_city['sale_price'].mean():,.0f}")
-col3.metric("Avg PPSF", f"${df_city['ppsf'].mean():,.0f}")
-
-city_over = (
-    df_city["sale_price"].sum() /
-    df_city["list_price"].sum()
-) - 1
-
-col4.metric("% Over Asking", f"{city_over*100:.1f}%")
+render_kpi_row([
+    ("Median Price", f"${df_city['sale_price'].median():,.0f}", ""),
+    ("Avg Price", f"${df_city['sale_price'].mean():,.0f}", ""),
+    ("Avg PPSF", f"${df_city['ppsf'].mean():,.0f}", ""),
+    ("% Over Asking", f"{city_over*100:.1f}%", "pos" if city_over > 0 else "neg"),
+])
 
 # -------------------
 # SELECTED AREA
 # -------------------
-st.subheader(f"📍 Selected Area: {selected_zip}")
+render_section(f"Selected Area — {selected_zip}", accent="#2563EB")
 
 if not df_filtered.empty:
-    col1, col2, col3, col4 = st.columns(4)
+    filtered_over = (df_filtered["sale_price"].sum() / df_filtered["list_price"].sum()) - 1
 
-    col1.metric("Median Price", f"${df_filtered['sale_price'].median():,.0f}")
-    col2.metric("Avg Price", f"${df_filtered['sale_price'].mean():,.0f}")
-    col3.metric("Avg PPSF", f"${df_filtered['ppsf'].mean():,.0f}")
-
-    filtered_over = (
-        df_filtered["sale_price"].sum() /
-        df_filtered["list_price"].sum()
-    ) - 1
-
-    col4.metric("% Over Asking", f"{filtered_over*100:.1f}%")
-
-# ==================================================
-# MARKET SIGNAL
-# ==================================================
-#st.markdown("### 🧠 Market Signal Engine")
-
-#signal_df = df_city if selected_zip == "ALL" else df_filtered
-#active_df = df_active_city if selected_zip == "ALL" else df_active_filtered
-
-#signal = compute_market_signal(signal_df, active_df)
-
-#label = signal["label"]
-#score = signal["confidence"]
-
-#if label == "SELLER":
-#    st.success(f"🔥 SELLER MARKET — {score}/100")
-#elif label == "BALANCED":
-#    st.info(f"⚖️ BALANCED MARKET — {score}/100")
-#else:
-#    st.warning(f"📉 BUYER MARKET — {score}/100")
-
+    render_kpi_row([
+        ("Median Price", f"${df_filtered['sale_price'].median():,.0f}", ""),
+        ("Avg Price", f"${df_filtered['sale_price'].mean():,.0f}", ""),
+        ("Avg PPSF", f"${df_filtered['ppsf'].mean():,.0f}", ""),
+        ("% Over Asking", f"{filtered_over*100:.1f}%", "pos" if filtered_over > 0 else "neg"),
+    ])
 
 # ==================================================
 # DEFINE CURRENT ANALYSIS SCOPE
@@ -224,138 +197,57 @@ else:
 # MARKET SIGNAL ENGINE
 # ==================================================
 
-st.markdown("### 🧠 Market Signal Engine")
-#signal_df = df_city if selected_zip == "ALL" else df_filtered
-#active_df = df_active_city if selected_zip == "ALL" else df_active_filtered
-
-signal = compute_market_signal(
-    signal_df,
-    #active_signal_df
-    active_df 	
-)
-
-
+signal = compute_market_signal(signal_df, active_df)
 components = signal["components"]
-
 label = signal["label"]
-
 market_score = signal["confidence"]
 
+signal_meta = {
+    "SELLER":   ("seller",   "#099250", "🔥 SELLER MARKET"),
+    "BALANCED": ("balanced", "#B54708", "⚖️ BALANCED MARKET"),
+}
+kind, accent, banner_label = signal_meta.get(label, ("buyer", "#B42318", "📉 BUYER MARKET"))
 
-st.caption(
-    f"Market conditions for {signal_scope} "
-    f"based on "
-    f"{components['historical_transactions']:,} "
-    f"historical transactions and "
-    f"{components['active_listings']:,} "
-    f"active listings"
+render_section(
+    "Market Signal Engine",
+    caption=(
+        f"Based on {components['historical_transactions']:,} historical transactions "
+        f"and {components['active_listings']:,} active listings in {signal_scope}"
+    ),
+    accent=accent
 )
 
+render_status_banner(banner_label, f"SCORE {market_score}/100", kind=kind)
 
-if label == "SELLER":
-
-    st.success(
-        f"🔥 SELLER MARKET — Market Score: {market_score}/100"
-    )
-
-elif label == "BALANCED":
-
-    st.info(
-        f"⚖️ BALANCED MARKET — Market Score: {market_score}/100"
-    )
-
-else:
-
-    st.warning(
-        f"📉 BUYER MARKET — Market Score: {market_score}/100"
-    )
-
-
-# -------------------
-# SIGNAL KPIs
-# -------------------
-
-col1, col2, col3, col4 = st.columns(4)
-
-
-col1.metric(
-    "Sale / List",
-    f"{(1 + components['over_asking']) * 100:.1f}%"
-)
-
-
-col2.metric(
-    "Historical Sales",
-    f"{components['historical_transactions']:,}"
-)
-
-
-col3.metric(
-    "Active Listings",
-    f"{components['active_listings']:,}"
-)
-
-
-col4.metric(
-    "Market Score",
-    f"{market_score}/100"
-)
-
-
-
-
-
+render_kpi_row([
+    ("Sale / List", f"{(1 + components['over_asking']) * 100:.1f}%", ""),
+    ("Historical Sales", f"{components['historical_transactions']:,}", ""),
+    ("Active Listings", f"{components['active_listings']:,}", ""),
+    ("Market Score", f"{market_score}/100", kind if kind != "balanced" else ""),
+])
 
 
 # ==================================================
 # OPPORTUNITY ENGINE
 # ==================================================
+render_section("Opportunity Engine", caption="Underpriced active listings", accent="#099250")
 
-st.markdown("### 🚀 Opportunity Engine")
-
-# --------------------------------------------------
-# CALCULATE OPPORTUNITIES
-# --------------------------------------------------
-
-df_opportunities = compute_opportunity_engine(
-    active_df,
-    signal_df
-).copy()
-
-# --------------------------------------------------
-# OPPORTUNITY SUMMARY
-# --------------------------------------------------
+df_opportunities = compute_opportunity_engine(active_df, signal_df).copy()
 
 if df_opportunities.empty:
-
-    st.info(
-        f"No qualified opportunities found in {signal_scope}."
+    st.markdown(
+        f'<div class="sfm-section-caption">No qualified opportunities found in {signal_scope}.</div>',
+        unsafe_allow_html=True
     )
-
 else:
+    high_conviction = len(df_opportunities[df_opportunities["opportunity_score"] >= 80])
 
-    col1, col2, col3 = st.columns(3)
+    render_kpi_row([
+        ("Active Listings", f"{len(active_df):,}", ""),
+        ("Qualified Opportunities", f"{len(df_opportunities):,}", "pos"),
+        ("High-Conviction", f"{high_conviction:,}", "pos"),
+    ])
 
-    col1.metric(
-        "Active Listings",
-        f"{len(active_df):,}"
-    )
-
-    col2.metric(
-        "Qualified Opportunities",
-        f"{len(df_opportunities):,}"
-    )
-
-    high_conviction = len(
-        df_opportunities[
-            df_opportunities["opportunity_score"] >= 80
-        ]
-    )
-
-    col3.metric(
-        "High-Conviction",
-        f"{high_conviction:,}"
-    )
 
     # --------------------------------------------------
     # TOP N SELECTOR
@@ -500,7 +392,7 @@ else:
 # ==================================================
 # MAP
 # ==================================================
-st.subheader("Sales Map")
+render_section("Sales Map", accent="#2563EB")
 
 df_map = df_filtered.sample(min(len(df_filtered), 3000))
 
@@ -541,7 +433,7 @@ with col2:
 # -------------------
 # TREND
 # -------------------
-st.subheader("📈 Price Trend")
+render_section("Price Trend", accent="#2563EB")
 
 monthly = (
     df_filtered
@@ -562,7 +454,7 @@ st.plotly_chart(fig3, use_container_width=True)
 # -------------------
 # PRICE SEGMENTS
 # -------------------
-st.subheader("📦 Price Segments")
+render_section("Price Segments", accent="#2563EB")
 
 bins = [0, 1e6, 2e6, 5e6, 10e6, 1e9]
 labels = ["<1M", "1-2M", "2-5M", "5-10M", "10M+"]
@@ -582,7 +474,7 @@ st.bar_chart(
 # -------------------
 # RECENT SALES
 # -------------------
-st.subheader("📋 Recent Sales")
+render_section("Recent Sales", accent="#2563EB")
 
 display_cols = [
     "full_address",

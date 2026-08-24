@@ -1,14 +1,16 @@
 import streamlit as st
 import pandas as pd
 from db import get_engine
-from sqlalchemy import create_engine
+
 from market_data import load_market_data
 
 # -------------------
 # CONFIG
 # -------------------
-#st.set_page_config(layout="wide")
-st.title("🧠 Market Deep Dive")
+from theme import inject_theme, render_page_header, render_section, render_kpi_row
+
+inject_theme(page_title="Market Deep Dive", page_icon="🧠")
+render_page_header("Market Deep Dive", "San Francisco · Detailed Market Analysis")
 
 # -------------------
 # DB
@@ -117,22 +119,22 @@ def display_table(df, columns, sort_by=None, ascending=True, top_n=50):
 # -------------------
 # 🔥 1. OVER / UNDER ASKING
 # -------------------
-st.subheader("Market Behavior")
-
-col1, col2, col3 = st.columns(3)
+render_section("Market Behavior", accent="#2563EB")
 
 over = (df["diff"] > 0).sum()
 under = (df["diff"] < 0).sum()
 equal = (df["diff"] == 0).sum()
 
-col1.metric("Over Asking", over)
-col2.metric("Under Asking", under)
-col3.metric("At Asking", equal)
+render_kpi_row([
+    ("Over Asking", f"{over:,}", "pos"),
+    ("Under Asking", f"{under:,}", "neg"),
+    ("At Asking", f"{equal:,}", ""),
+])
 
 # -------------------
 # 🔥 2. TOP DEALS (UNDERPRICED)
 # -------------------
-st.subheader("💰 Most Underpriced Deals")
+render_section("💰 Most Underpriced Deals", accent="#099250")
 
 # 🔥 TRUE UNDERPRICED LOGIC
 df["deal_score"] = df["diff"] / df["list_price"]
@@ -156,7 +158,7 @@ display_table(
 # -------------------
 # 🔥 3. MOST OVERPRICED
 # -------------------
-st.subheader("⚠️ Most Overpriced Sales")
+render_section("⚠️ Most Overpriced Sales", accent="#B42318")
 
 display_table(
     df=df,
@@ -169,7 +171,7 @@ display_table(
 # -------------------
 # 🔥 4. ZIP CODE ANALYSIS
 # -------------------
-st.subheader("📍 Zip Code Breakdown")
+render_section("📍 Zip Code Breakdown", accent="#2563EB")
 
 zip_stats = (
     df.groupby("zip_code")
@@ -193,7 +195,7 @@ display_table(
 # -------------------
 # 🔥 5. PRICE SEGMENTS
 # -------------------
-st.subheader("🏷️ Market Segments")
+render_section("🏷️ Market Segments", accent="#2563EB")
 
 bins = [0, 1e6, 2e6, 5e6, 10e6, 1e9]
 labels = ["<1M", "1-2M", "2-5M", "5-10M", "10M+"]
@@ -207,13 +209,15 @@ st.bar_chart(segment_stats)
 # -------------------
 # 🔥 6. LUXURY MARKET
 # -------------------
-st.subheader("💎 Luxury Market (Top 5%)")
+render_section("💎 Luxury Market (Top 5%)", accent="#2563EB")
 
 threshold = df["sale_price"].quantile(0.95)
 
 luxury = df[df["sale_price"] >= threshold]
 
-st.metric("Luxury Threshold", f"${threshold:,.0f}")
+render_kpi_row([
+    ("Luxury Threshold", f"${threshold:,.0f}", ""),
+])
 
 display_cols = ["full_address", "sale_price", "list_price", "diff", "sqft", "ppsf"]
 
