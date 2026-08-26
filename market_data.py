@@ -1089,3 +1089,37 @@ def get_neighborhood_stats(zip_code, property_type, engine):
         return None
 
     return df.iloc[0]
+
+# ============================================================
+# ASSESSOR TAX ROLL HISTORY (single property)
+# ============================================================
+
+def get_assessor_history(property_id, engine):
+    query = """
+    SELECT
+        closed_roll_year,
+        use_definition,
+        property_class_code_definition,
+        year_property_built,
+        number_of_bedrooms,
+        number_of_bathrooms,
+        property_area,
+        current_sales_date,
+        assessed_land_value,
+        assessed_improvement_value
+    FROM assessor_tax_rolls
+    WHERE property_id = %s
+    ORDER BY closed_roll_year ASC
+    """
+
+    df = pd.read_sql(query, engine, params=(property_id,))
+
+    if df.empty:
+        return df
+
+    df["closed_roll_year"] = pd.to_numeric(df["closed_roll_year"], errors="coerce")
+    df["assessed_land_value"] = pd.to_numeric(df["assessed_land_value"], errors="coerce")
+    df["assessed_improvement_value"] = pd.to_numeric(df["assessed_improvement_value"], errors="coerce")
+    df["total_assessed_value"] = df["assessed_land_value"] + df["assessed_improvement_value"]
+
+    return df

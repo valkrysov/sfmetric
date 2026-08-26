@@ -8,7 +8,7 @@ import folium
 from streamlit_folium import st_folium
 
 from your_module import get_subject, get_ranked_comps, get_comparables
-from market_data import get_property_sales_history, get_neighborhood_stats
+from market_data import get_property_sales_history, get_neighborhood_stats, get_assessor_history
 
 from theme import inject_theme, render_page_header, render_section
 
@@ -388,6 +388,66 @@ if st.session_state.run_analysis and property_id:
         n2.metric("Avg PPSF", f"${neighborhood_stats['avg_ppsf']:,.0f}")
         n3.metric("% Sold Over Asking", f"{neighborhood_stats['pct_over_asking']*100:.0f}%")
         n4.metric("Sales (24mo)", f"{int(neighborhood_stats['sale_count']):,}")
+
+        
+        # =========================
+        # 🏛️ ASSESSOR TAX ROLL HISTORY
+        # =========================
+        render_section(
+            "Assessor Tax Roll History",
+            caption="Annual assessed value, from SF Office of the Assessor-Recorder (public record)",
+            accent="#667085"
+        )
+
+        assessor_history = get_assessor_history(property_id, engine)
+
+        if assessor_history.empty:
+            st.info("No assessor tax roll history available for this property.")
+        else:
+            chart_df = assessor_history.set_index("closed_roll_year")[
+                ["assessed_land_value", "assessed_improvement_value"]
+            ]
+            chart_df.columns = ["Land Value", "Improvement Value"]
+            st.line_chart(chart_df)
+
+            table_display = assessor_history.copy()
+            table_display["current_sales_date"] = pd.to_datetime(
+                table_display["current_sales_date"], errors="coerce"
+            ).dt.strftime("%Y-%m-%d")
+            table_display["assessed_land_value"] = table_display["assessed_land_value"].map(
+                lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A"
+            )
+            table_display["assessed_improvement_value"] = table_display["assessed_improvement_value"].map(
+                lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A"
+            )
+            table_display["total_assessed_value"] = table_display["total_assessed_value"].map(
+                lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A"
+            )
+            table_display = table_display.rename(columns={
+                "closed_roll_year": "Roll Year",
+                "current_sales_date": "Last Recorded Sale",
+                "assessed_land_value": "Land Value",
+                "assessed_improvement_value": "Improvement Value",
+                "total_assessed_value": "Total Assessed",
+                "year_property_built": "Year Built",
+                "number_of_bedrooms": "Beds (Assessor)",
+                "number_of_bathrooms": "Baths (Assessor)",
+                "property_area": "Sqft (Assessor)"
+            })
+
+            display_cols = [
+                "Roll Year", "Total Assessed", "Land Value", "Improvement Value", "Last Recorded Sale"
+            ]
+            display_cols = [c for c in display_cols if c in table_display.columns]
+
+            st.dataframe(
+                table_display[display_cols].sort_values("Roll Year", ascending=False),
+                use_container_width=True,
+                hide_index=True
+            )
+       
+
+
 
     # =========================
     # 🤖 AI OPPORTUNITY EXPLANATION
