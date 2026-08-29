@@ -8,8 +8,7 @@ import folium
 from streamlit_folium import st_folium
 
 from your_module import get_subject, get_ranked_comps, get_comparables
-from market_data import get_property_sales_history, get_neighborhood_stats, get_assessor_history
-
+from market_data import get_property_sales_history, get_neighborhood_stats, get_assessor_history, get_eviction_history, get_permit_history
 from theme import inject_theme, render_page_header, render_section
 
 inject_theme(page_title="Property Intelligence", page_icon="🏡")
@@ -446,6 +445,98 @@ if st.session_state.run_analysis and property_id:
                 hide_index=True
             )
        
+        
+        # =========================
+        # 🏚️ EVICTION NOTICE HISTORY
+        # =========================
+        render_section(
+            "Eviction Notice History",
+            caption="Rent Board filings recorded nearby (within ~60m) — source: SF Rent Arbitration Board (public record)",
+            accent="#B42318"
+        )
+
+        eviction_history = get_eviction_history(property_id, engine)
+
+        if eviction_history.empty:
+            st.info("No eviction notice filings recorded within proximity of this property.")
+        else:
+            st.warning(
+                f"⚠️ {len(eviction_history)} eviction notice filing(s) recorded nearby. "
+                f"**A notice does not confirm a tenant was actually evicted or that this specific unit was involved** — "
+                f"source data is block-level, not unit-precise. Consult a real estate attorney for tenancy or "
+                f"disclosure questions."
+            )
+
+            table_display = eviction_history.copy()
+            table_display["file_date"] = table_display["file_date"].dt.strftime("%Y-%m-%d")
+            table_display["match_distance_meters"] = table_display["match_distance_meters"].map(
+                lambda x: f"{x:.0f}m away" if pd.notna(x) else "N/A"
+            )
+            table_display = table_display.rename(columns={
+                "file_date": "Filing Date",
+                "match_distance_meters": "Proximity",
+                "reasons": "Stated Reason(s)"
+            })
+
+            st.dataframe(
+                table_display[["Filing Date", "Proximity", "Stated Reason(s)"]],
+                use_container_width=True,
+                hide_index=True
+            )                
+
+        
+        # =========================
+        # 🔨 BUILDING PERMIT HISTORY
+        # =========================
+        render_section(
+            "Building Permit History",
+            caption="Permits filed with SF Dept. of Building Inspection (public record)",
+            accent="#099250"
+        )
+
+        permit_history = get_permit_history(property_id, engine)
+
+        if permit_history.empty:
+            st.info("No building permit history found for this property.")
+        else:
+            has_adu = permit_history["adu"].any()
+            has_retrofit = permit_history["voluntary_soft_story_retrofit"].any()
+
+            if has_adu:
+                st.success("🏠 Accessory Dwelling Unit (ADU) permit found — potential legal secondary unit.")
+            if has_retrofit:
+                st.success("🏗️ Voluntary soft-story seismic retrofit permit on record.")
+
+            latest_major = permit_history[permit_history["estimated_cost"] >= 25000].head(1)
+            if not latest_major.empty:
+                row = latest_major.iloc[0]
+                year = row["filed_date"].year if pd.notna(row["filed_date"]) else "unknown year"
+                st.caption(
+                    f"Most recent major permit (${row['estimated_cost']:,.0f}+): "
+                   f"{row['permit_type_definition']} filed {year}"
+                )
+
+            table_display = permit_history.copy()
+            table_display["filed_date"] = table_display["filed_date"].dt.strftime("%Y-%m-%d")
+            table_display["estimated_cost"] = table_display["estimated_cost"].map(
+                lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A"
+            )
+            table_display = table_display.rename(columns={
+                "filed_date": "Filed",
+                "permit_type_definition": "Type",
+                "description": "Description",
+                "status": "Status",
+                "estimated_cost": "Est. Cost"
+            })
+
+            display_cols = ["Filed", "Type", "Description", "Status", "Est. Cost"]
+            display_cols = [c for c in display_cols if c in table_display.columns]
+
+            st.dataframe(
+                table_display[display_cols],
+                use_container_width=True,
+                hide_index=True
+            )
 
 
 
