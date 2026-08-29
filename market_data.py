@@ -1123,3 +1123,111 @@ def get_assessor_history(property_id, engine):
     df["total_assessed_value"] = df["assessed_land_value"] + df["assessed_improvement_value"]
 
     return df
+
+
+# ============================================================
+# EVICTION NOTICE HISTORY (near this property)
+# ============================================================
+
+def get_eviction_history(property_id, engine):
+    query = """
+    SELECT
+        eviction_id,
+        file_date,
+        match_distance_meters,
+        non_payment, breach, nuisance, illegal_use,
+        failure_to_sign_renewal, access_denial, unapproved_subtenant,
+        owner_move_in, demolition, capital_improvement,
+        substantial_rehab, ellis_act_withdrawal, condo_conversion,
+        roommate_same_unit, other_cause, late_payments,
+        lead_remediation, development, good_samaritan_ends
+    FROM sf_eviction_notices
+    WHERE property_id = %s
+    ORDER BY file_date DESC
+    """
+
+    df = pd.read_sql(query, engine, params=(property_id,))
+
+    if df.empty:
+        return df
+
+    df["file_date"] = pd.to_datetime(df["file_date"], errors="coerce")
+
+    reason_cols = [
+        "non_payment", "breach", "nuisance", "illegal_use",
+        "failure_to_sign_renewal", "access_denial", "unapproved_subtenant",
+        "owner_move_in", "demolition", "capital_improvement",
+        "substantial_rehab", "ellis_act_withdrawal", "condo_conversion",
+        "roommate_same_unit", "other_cause", "late_payments",
+        "lead_remediation", "development", "good_samaritan_ends"
+    ]
+
+    reason_labels = {
+        "non_payment": "Non-Payment",
+        "breach": "Breach of Lease",
+        "nuisance": "Nuisance",
+        "illegal_use": "Illegal Use",
+        "failure_to_sign_renewal": "Failure to Sign Renewal",
+        "access_denial": "Access Denial",
+        "unapproved_subtenant": "Unapproved Subtenant",
+        "owner_move_in": "Owner Move-In",
+        "demolition": "Demolition",
+        "capital_improvement": "Capital Improvement",
+        "substantial_rehab": "Substantial Rehab",
+        "ellis_act_withdrawal": "Ellis Act Withdrawal",
+        "condo_conversion": "Condo Conversion",
+        "roommate_same_unit": "Roommate (Same Unit)",
+        "other_cause": "Other Cause",
+        "late_payments": "Late Payments",
+        "lead_remediation": "Lead Remediation",
+        "development": "Development",
+        "good_samaritan_ends": "Good Samaritan Ends",
+    }
+
+    def summarize_reasons(row):
+        reasons = [reason_labels[c] for c in reason_cols if row.get(c)]
+        return ", ".join(reasons) if reasons else "Not specified"
+
+    df["reasons"] = df[reason_cols].apply(summarize_reasons, axis=1)
+
+    return df[["eviction_id", "file_date", "match_distance_meters", "reasons"]]
+
+
+# ============================================================
+# BUILDING PERMIT HISTORY (this property)
+# ============================================================
+
+def get_permit_history(property_id, engine):
+    query = """
+    SELECT
+        permit_number,
+        permit_type_definition,
+        description,
+        status,
+        filed_date,
+        issued_date,
+        completed_date,
+        estimated_cost,
+        existing_use,
+        proposed_use,
+        existing_units,
+        proposed_units,
+        adu,
+        voluntary_soft_story_retrofit
+    FROM sf_building_permits
+    WHERE property_id = %s
+    ORDER BY filed_date DESC
+    """
+
+    df = pd.read_sql(query, engine, params=(property_id,))
+
+    if df.empty:
+        return df
+
+    for col in ["filed_date", "issued_date", "completed_date"]:
+        df[col] = pd.to_datetime(df[col], errors="coerce")
+
+    df["estimated_cost"] = pd.to_numeric(df["estimated_cost"], errors="coerce")
+
+    return df
+
