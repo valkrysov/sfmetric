@@ -22,7 +22,7 @@ inject_theme(page_title="Overview", page_icon="🏙️")
 # ==========================================
 
 engine = get_engine()
-st.sidebar.caption(f"🔌 DB host: {engine.url.host}")
+#st.sidebar.caption(f"🔌 DB host: {engine.url.host}")
 
 render_page_header("SF Housing Intelligence", "Live Real Estate Analytics — San Francisco")
 # ==========================================
