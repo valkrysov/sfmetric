@@ -14,6 +14,7 @@ from db import get_engine
 # ==========================================
 
 from theme import inject_theme, render_page_header, render_section
+st.sidebar.caption(f"🔌 DB host: {engine.url.host}")
 
 inject_theme(page_title="Overview", page_icon="🏙️")
 
