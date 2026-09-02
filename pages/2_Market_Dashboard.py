@@ -402,7 +402,8 @@ fig_map = px.scatter_mapbox(
     lon="longitude",
     color="sale_price",
     size="sale_price",
-    zoom=11
+    zoom=11,
+    center={"lat": 37.7749, "lon": -122.4194}
 )
 
 fig_map.update_layout(mapbox_style="open-street-map")

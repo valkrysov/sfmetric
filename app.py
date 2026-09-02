@@ -368,7 +368,6 @@ df_map["price_psf"] = df_map["price_psf"].replace([np.inf, -np.inf], np.nan)
 df_map["price_psf"] = df_map["price_psf"].round(0)
 
 
-#✅ STEP 3 — Build interactive map (Plotly)
 fig_map = px.scatter_mapbox(
     df_map,
     lat="latitude",
@@ -379,6 +378,7 @@ fig_map = px.scatter_mapbox(
 
     zoom=11,
     height=650,
+    center={"lat": 37.7749, "lon": -122.4194},
 
     hover_name="address",
 
@@ -399,39 +399,9 @@ fig_map = px.scatter_mapbox(
 
 #✅ STEP 4 — Map style (important for UX)
 fig_map.update_layout(
-    mapbox_style="carto-positron",
+    mapbox_style="open-street-map",
     margin=dict(l=0, r=0, t=0, b=0)
 )
-
-
-#fig_map = px.scatter_map(
-#    df_map,
-#    lat="latitude",
-#    lon="longitude",
-
-#    size="list_price",
-#    color="property_type",
-
-#    zoom=11,
-#    height=650,
-
-#    center={"lat": 37.7749, "lon": -122.4194},  # ✅ SF center
-
-#    hover_name="address",
-
-#    hover_data={
-#        "neighborhood": True,
-#        "list_price": ":$,.0f",
-#        "price_psf": ":$,.0f",
-#        "beds": True,
-#        "baths_full": True,
-#        "sqft": ":,.0f",
-#        "days_on_market": True,
-#        "property_type": True,
-#        "latitude": False,
-#        "longitude": False,
-#    }
-#)
 
 #✅ STEP 5 — Render
 st.plotly_chart(

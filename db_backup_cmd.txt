@@ -1,0 +1,11 @@
+Full DB backup from Supabase
+pg_dump "postgresql://postgres.vjolxevvleyagviewnnr:Nko2HJAWfJ5huosM@aws-0-us-west-1.pooler.supabase.com:6543/postgres" > backup.sql
+
+Full DB restore from local DB backup into Neon DB
+psql "postgresql://neondb_owner:npg_S0XAJV4qaWdi@ep-flat-rice-afl6klhi.c-2.us-west-2.aws.neon.tech/neondb?sslmode=require" -f backup.sql
+
+Full DB backup from Neon
+pg_dump "postgresql://neondb_owner:npg_S0XAJV4qaWdi@ep-flat-rice-afl6klhi.c-2.us-west-2.aws.neon.tech/neondb?sslmode=require" --no-owner --no-privileges > backup.sql
+
+Full DB backup from local DB
+pg_dump -h localhost -p 5433 -U postgres -d sfmetric -f full_local_backup.sql

@@ -1,0 +1,88 @@
+Phase 2 — Quick wins (low effort, real value, good morale after yesterday's grind)
+
+7. Walk Score API — you already correctly identified this as fastest/cheapest. Do it early for a quick win.
+11. Mortgage calculator — genuinely cheap, no data pipeline needed, works well as a free-tier hook once #10 exists.
+
+Phase 3 — Operational necessity (merge #3 and #4)
+These are really one task: "automated monthly refresh." Treat them together, not as two separate line items. This is infrastructure that pays for itself every month going forward — worth real effort now.
+
+Phase 4 — Data depth (reuses proven patterns, moderate effort)
+
+1. Historical 1993–2004 — do this after the Neon upgrade specifically, so a large one-time load doesn't fight the storage cap. Re-run the three DataSF loaders once afterward, as we discussed.
+5. Zoning/upzoning — strongest differentiation of the remaining DataSF integrations.
+6. DBI Code Enforcement — pairs naturally with Permits, similar effort to your last three builds.
+
+Phase 5 — Monetization (this deserves to move up, not sit at #10)
+
+10. Auth/Paywall — you have real, differentiated, working features sitting entirely free right now. Every week without a paywall is a week of unrealized revenue on work already done. I'd pull this forward significantly — decide what's free (Market Dashboard, mortgage calculator) vs. paid (Property Intelligence full report, Opportunity Engine, AI explanation) based on what Phase 1's interviews tell you people actually value.
+
+Phase 6 — Core differentiation (bigger technical lift, can run in parallel to Phase 5 since it's a different skillset)
+
+9. Estimates engine — this is your real long-term moat against Zillow, worth serious investment, but it's a multi-session build (feature engineering, validation, SHAP explainability). Start it, don't expect to finish it in September alongside everything else.
+
+Phase 7 — Bigger bets, gate on Phase 1 feedback
+
+2. Multi-family — genuinely a separate project (different valuation math, rent data you don't have). Only commit real September time to this if your interviews specifically surface demand for it. Don't build it speculatively.
+14. Corporation registration - free or     $100
+15. DRE license for corporation -          $450
+16. Association of Realtors/MLS/IDX Feed   $2700
+8. IDX feed — start the conversation with SFAR/your MLS now (it has real external lead time you don't control — contract terms, VOW vs. IDX licensing), but don't block anything else on it. Treat actual integration as a Q4 item.
+
+Phase 8 — Polish (last, deliberately)
+
+12. Branding/Marketing/Layout — matters, but polishing a product nobody's paying for yet is lower leverage than getting the paywall live. Do this once revenue exists, not before.
+What's genuinely missing from your list
+Terms of Service / Privacy Policy, and specifically legal review of the Eviction Notice disclosure language — we flagged this explicitly weeks ago and it's still outstanding. You cannot ethically or safely charge money for a product surfacing eviction/tenancy data without this in place. This belongs in Phase 5, tightly coupled to the paywall launch, not an afterthought.
+Backup discipline — you've been doing ad hoc pg_dump backups reactively. Worth a simple weekly scheduled backup habit (even just a calendar reminder) now that real customer-adjacent data lives in your database.
+A realistic scope cut — this is a genuinely large list for one person in one month, even well-prioritized. I'd pick 3-4 items maximum as your real September commitments (my suggestion: Neon upgrade + interviews + monthly automation + Walk Score, with paywall as a stretch goal) and consciously push the rest to October rather than trying to touch all 13.
+Bottom line
+
+
+
+Your instinct on what matters is good — the gap is sequencing around customer validation and monetization, which are currently your two biggest unrealized-value items sitting behind a pile of "more building." I'd rather you ship a paywall around what you have today than add three more free data layers nobody's asked for yet.
+
+
+
+1. Historical sales 1993-2004
+For historical sales - is it possible to concatenate all SFR_*.CSV, Condo_*csv, Townhomes_*.csv files in a folder into one file - respectfully -  SFR_File.csv, Condo_File.csv, Townhomes_*csv files;
+Create new column ADDRESS as a result of: =C2&" "&B2&" "&D2;
+keep only those columns:
+    For SFR
+    For Condo
+    For Townhomes 
+2. Multi-family sales
+3. Monthly update on SFR, Condo and townhomes - automate files preparation (new address column, columns to drop/kee/rename - in case old historical datafeed columns are different)
+4. Active listings update
+5. Zoning/upzoning data — strong differentiation, reuses your proven DataSF integration pattern.
+6. DBI Code Enforcement / Complaints (DataSF) — pairs naturally with your Permits data; flags unresolved building violations, a real risk    
+   signal for buyers.
+7. Walk Score API — cheapest, fastest, free to start, real customer value.
+8. IDX feed - automate active listings
+9. Estimates engine - complete analysis
+10. AUTH/PayWall/What exactly put behind
+11. Free tools - mortgage calculator 
+12. Branding/Marketing/Layout/Colors
+DONE 13. Neon plan upgrade? 
+14. Corporation registration
+15. DRE license for corporation
+16. Association of Realtors/MLS/IDX Feed 
+
+
+
+
+Renewal Fees
+ 				Broker
+Corporation License Fees
+License Fee			$450
+
+2026 REALTOR® Membership Dues	$1,206.00
+
+SUPRA Key Fees
+EKEY Fee (Prorated monthly) 	$400.00
+
+MLS (BROKER)			$ 1100
+
+Registration of corporation	$100
+
+Total 				$3250	
+
