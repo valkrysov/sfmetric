@@ -397,7 +397,7 @@ fig_map = px.scatter_mapbox(
     }
 )
 
-✅ STEP 4 — Map style (important for UX)
+#✅ STEP 4 — Map style (important for UX)
 fig_map.update_layout(
     mapbox_style="carto-positron",
     margin=dict(l=0, r=0, t=0, b=0)
