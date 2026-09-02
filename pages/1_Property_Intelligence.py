@@ -401,7 +401,12 @@ if st.session_state.run_analysis and property_id:
         assessor_history = get_assessor_history(property_id, engine)
 
         if assessor_history.empty:
-            st.info("No assessor tax roll history available for this property.")
+            #st.info("No assessor tax roll history available for this property.")
+            st.info(
+            "No assessor tax roll history available for this property. "
+            "Note: DataSF's public assessor roll dataset generally covers 2007 onward — "
+            "older or recently-subdivided parcels may not yet have matching records."
+        )
         else:
             chart_df = assessor_history.set_index("closed_roll_year")[
                 ["assessed_land_value", "assessed_improvement_value"]
