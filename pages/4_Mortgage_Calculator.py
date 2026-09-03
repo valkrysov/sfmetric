@@ -9,6 +9,23 @@ render_page_header("Mortgage Calculator", "Estimate your monthly payment for a S
 # =========================
 render_section("Loan Details", accent="#2563EB")
 
+# -----------------------------------------------------
+# PRE-FILL FROM PROPERTY INTELLIGENCE LINK (via URL query param)
+# -----------------------------------------------------
+prefill_price = st.query_params.get("price")
+
+if prefill_price:
+    try:
+        default_price = int(prefill_price)
+    except (TypeError, ValueError):
+        default_price = 1200000
+    st.query_params.clear()
+else:
+    default_price = 1200000
+
+if prefill_price:
+    st.caption(f"💡 Pre-filled from property estimate: ${default_price:,.0f}")
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -16,7 +33,7 @@ with col1:
         "Home Price ($)",
         min_value=50000,
         max_value=20000000,
-        value=1200000,
+        value=default_price,
         step=10000,
     )
 

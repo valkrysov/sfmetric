@@ -256,6 +256,12 @@ if st.session_state.run_analysis and property_id:
     col4.metric("Range High", f"${high:,.0f}")
     col5.metric("Confidence", f"{confidence:.2f}")
 
+    st.markdown(
+        f'<a href="/Mortgage_Calculator?price={int(price)}" target="_self">'
+        f'🧮 Calculate mortgage payment for this property →</a>',
+        unsafe_allow_html=True
+    )
+
 
 
 
