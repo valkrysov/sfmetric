@@ -90,7 +90,7 @@ def get_comparables(property_id, engine):
         FROM properties
         WHERE property_id = %s
     )
-    AND t.sale_date >= CURRENT_DATE - INTERVAL '24 months'
+    AND t.close_date >= CURRENT_DATE - INTERVAL '24 months'
     AND p.latitude BETWEEN 37.6 AND 37.9
     AND p.longitude BETWEEN -122.6 AND -122.3
     """

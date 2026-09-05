@@ -34,7 +34,7 @@ EARLIEST_TRUSTED_DATE = datetime.date(1993, 1, 1)
 
 @st.cache_data(ttl=3600)
 def get_data_date_range(_engine):
-    query = "SELECT MIN(sale_date) AS min_date, MAX(sale_date) AS max_date FROM transactions"
+    query = "SELECT MIN(close_date) AS min_date, MAX(close_date) AS max_date FROM transactions"
     df_range = pd.read_sql(query, _engine)
     return df_range.iloc[0]["min_date"], df_range.iloc[0]["max_date"]
 

@@ -38,11 +38,10 @@ def load_market_data(engine, start_date=None, end_date=None, property_type=None)
     params = []
 
     if start_date:
-        query += " AND t.sale_date >= %s"
+        query += " AND t.close_date >= %s"
         params.append(start_date)
-
     if end_date:
-        query += " AND t.sale_date <= %s"
+        query += " AND t.close_date <= %s"
         params.append(end_date)
 
     if property_type:
@@ -1078,7 +1077,7 @@ def get_neighborhood_stats(zip_code, property_type, engine):
     JOIN properties p ON t.property_id = p.property_id
     WHERE p.zip_code = %s
       AND p.property_type = %s
-      AND t.sale_date >= CURRENT_DATE - INTERVAL '24 months'
+      AND t.close_date >= CURRENT_DATE - INTERVAL '24 months'
       AND t.sale_price IS NOT NULL
       AND t.list_price IS NOT NULL
     """
