@@ -265,7 +265,7 @@ fig_choro = px.choropleth_mapbox(
 
     color=metric,
 
-    mapbox_style="carto-positron",
+    mapbox_style="open-street-map",
     zoom=11,
     center={"lat": 37.77, "lon": -122.43},
 
