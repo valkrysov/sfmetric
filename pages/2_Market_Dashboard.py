@@ -30,14 +30,26 @@ property_type = st.sidebar.selectbox(
     key="property_type_filter"
 )
 
+import datetime
+
+EARLIEST_TRUSTED_DATE = datetime.date(1993, 1, 1)
+
+@st.cache_data(ttl=3600)
+def get_data_date_range(_engine):
+    query = "SELECT MIN(sale_date) AS min_date, MAX(sale_date) AS max_date FROM transactions"
+    df = pd.read_sql(query, _engine)
+    return df.iloc[0]["min_date"], df.iloc[0]["max_date"]
+
+raw_min_date, max_date = get_data_date_range(engine)
+min_date = max(raw_min_date, EARLIEST_TRUSTED_DATE)
+
+
 date_range = st.sidebar.date_input(
     "Date Range",
-    value=[],
-    min_value=pd.to_datetime("2005-01-01"),
-    max_value=pd.to_datetime("today"),
-    key="date_range_filter"
+    value=(),
+    min_value=min_date,
+    max_value=max_date
 )
-
 # -------------------
 # LOAD DATA
 # -------------------

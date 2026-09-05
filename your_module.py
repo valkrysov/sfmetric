@@ -73,28 +73,26 @@ def get_comparables(property_id, engine):
     property_id = str(property_id).strip()   # ✅ no more .replace("APN_", "")
     ...
     query = """
-    
-    SELECT 
+    SELECT
     p.*,
     t.sale_price,
     t.sale_date,
-    CASE 
-        WHEN p.unit_number IS NOT NULL 
+    CASE
+        WHEN p.unit_number IS NOT NULL
         THEN p.address || ' #' || p.unit_number
         ELSE p.address
     END AS full_address
     FROM properties p
     JOIN transactions t ON p.property_id = t.property_id
-
     WHERE p.property_id != %s
-
     AND p.property_type = (
         SELECT property_type
         FROM properties
         WHERE property_id = %s
     )
-
     AND t.sale_date >= CURRENT_DATE - INTERVAL '24 months'
+    AND p.latitude BETWEEN 37.6 AND 37.9
+    AND p.longitude BETWEEN -122.6 AND -122.3
     """
 
     return pd.read_sql(query, engine, params=(property_id, property_id))
@@ -124,8 +122,16 @@ def compute_distance_vectorized(df, subject):
 def similarity_score(row, subject):
     score = 0
 
-    score += 5 * (1 - abs(row["ppsf"] - subject["ppsf"]) / subject["ppsf"])
-    score += 2 * (1 - abs(row["sqft"] - subject["sqft"]) / subject["sqft"])
+    import math
+
+    subject_ppsf = subject.get("ppsf")
+    if subject_ppsf and subject_ppsf > 0 and math.isfinite(subject_ppsf):
+        score += 5 * (1 - abs(row["ppsf"] - subject_ppsf) / subject_ppsf)
+
+    subject_sqft = subject.get("sqft")
+    if subject_sqft and subject_sqft > 0 and math.isfinite(subject_sqft):
+        score += 2 * (1 - abs(row["sqft"] - subject_sqft) / subject_sqft)
+
     score -= row["distance"] * 2
 
     if row["zip_code"] == subject["zip_code"]:
@@ -150,15 +156,15 @@ def get_ranked_comps(property_id, engine):
 
     comps = comps[(comps["sqft"] > 0) & (comps["sale_price"] > 0)]
     comps = comps.nsmallest(50, "distance")
-
-    subject["ppsf"] = subject["sale_price"] / subject["sqft"]
+    subject["ppsf"] = (
+        subject["sale_price"] / subject["sqft"]
+        if subject["sqft"] and subject["sqft"] > 0
+        else None
+    )
     comps["ppsf"] = comps["sale_price"] / comps["sqft"]
-
     comps["score"] = comps.apply(lambda x: similarity_score(x, subject), axis=1)
-
     comps = comps.dropna(subset=["score"])
     comps = comps[comps["score"] > 0]
-
     if len(comps) == 0:
         return None, None, None, None, None, None
 

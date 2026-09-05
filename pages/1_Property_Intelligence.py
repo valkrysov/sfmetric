@@ -84,18 +84,24 @@ def resolve_property_id(input_value, engine):
 
     if unit:
         query = """
-        SELECT property_id
-        FROM properties
-        WHERE LOWER(address) LIKE LOWER(%s)
-        AND CAST(unit_number AS TEXT) ILIKE %s
+        SELECT p.property_id
+        FROM properties p
+        LEFT JOIN transactions t ON t.property_id = p.property_id
+        WHERE LOWER(p.address) LIKE LOWER(%s)
+        AND CAST(p.unit_number AS TEXT) ILIKE %s
+        GROUP BY p.property_id
+        ORDER BY MAX(t.sale_date) DESC NULLS LAST
         LIMIT 1
         """
         params = (f"%{base_address}%", f"%{unit}%")
     else:
         query = """
-        SELECT property_id
-        FROM properties
-        WHERE LOWER(address) LIKE LOWER(%s)
+        SELECT p.property_id
+        FROM properties p
+        LEFT JOIN transactions t ON t.property_id = p.property_id
+        WHERE LOWER(p.address) LIKE LOWER(%s)
+        GROUP BY p.property_id
+        ORDER BY MAX(t.sale_date) DESC NULLS LAST
         LIMIT 1
         """
         params = (f"%{base_address}%",)

@@ -68,11 +68,13 @@ SELECT
 FROM active_listings a
 JOIN properties p USING (property_id)
 WHERE
-    p.neighborhood IS NOT NULL
+    p.latitude BETWEEN 37.6 AND 37.9
+    AND p.longitude BETWEEN -122.6 AND -122.3
     AND a.list_price BETWEEN %s AND %s
     AND (%s = 'ALL' OR p.property_type = %s)
 GROUP BY p.neighborhood
 ORDER BY listings DESC
+LIMIT 5000
 """, (min_price, max_price, property_type, property_type))
 
 fig_inventory = px.bar(
@@ -347,16 +349,14 @@ SELECT
 FROM active_listings a
 JOIN properties p USING (property_id)
 WHERE
-    p.latitude IS NOT NULL
-    AND p.longitude IS NOT NULL
+    p.latitude BETWEEN 37.6 AND 37.9
+    AND p.longitude BETWEEN -122.6 AND -122.3
     AND a.list_price BETWEEN %s AND %s
     AND (%s = 'ALL' OR p.property_type = %s)
 LIMIT 5000
 """, (min_price, max_price, property_type, property_type))
 
-
-#✅ STEP 2 — Clean + prepare data
-
+#✅ STEP 2 - Clean + prepare data
 df_map["price_psf"] = (
     df_map["list_price"] / df_map["sqft"]
 )
