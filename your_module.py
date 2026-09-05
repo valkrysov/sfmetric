@@ -119,17 +119,26 @@ def compute_distance_vectorized(df, subject):
 # -------------------
 # SCORE
 # -------------------
+import pandas as pd
+
+STALE_SALE_YEARS = 3  # beyond this, don't trust the subject's own price for scoring
+
 def similarity_score(row, subject):
     score = 0
 
-    import math
+    sale_date = subject.get("sale_date")
+    is_stale = False
+    if sale_date is not None:
+        sale_date = pd.Timestamp(sale_date)
+        years_since_sale = (pd.Timestamp.now() - sale_date).days / 365.25
+        is_stale = years_since_sale > STALE_SALE_YEARS
 
     subject_ppsf = subject.get("ppsf")
-    if subject_ppsf and subject_ppsf > 0 and math.isfinite(subject_ppsf):
+    if not is_stale and subject_ppsf and subject_ppsf > 0:
         score += 5 * (1 - abs(row["ppsf"] - subject_ppsf) / subject_ppsf)
 
     subject_sqft = subject.get("sqft")
-    if subject_sqft and subject_sqft > 0 and math.isfinite(subject_sqft):
+    if subject_sqft and subject_sqft > 0:
         score += 2 * (1 - abs(row["sqft"] - subject_sqft) / subject_sqft)
 
     score -= row["distance"] * 2
@@ -139,6 +148,45 @@ def similarity_score(row, subject):
 
     return score
 
+def debug_comps_pipeline(property_id, engine):
+    """TEMPORARY — remove after diagnosing 211 Lake Merced Hills issue."""
+    subject = get_subject(property_id, engine)
+    if subject is None:
+        return {"error": "subject not found"}
+
+    comps = get_comparables(property_id, engine)
+    comps["distance"] = compute_distance_vectorized(comps, subject)
+
+    stage1 = len(comps)
+    comps = comps[(comps["sqft"] > 0) & (comps["sale_price"] > 0)]
+    stage2 = len(comps)
+    comps = comps.nsmallest(50, "distance")
+    stage3 = len(comps)
+
+    subject["ppsf"] = (
+        subject["sale_price"] / subject["sqft"]
+        if subject["sqft"] and subject["sqft"] > 0
+        else None
+    )
+    comps["ppsf"] = comps["sale_price"] / comps["sqft"]
+    comps["score"] = comps.apply(lambda x: similarity_score(x, subject), axis=1)
+
+    stage4 = len(comps.dropna(subset=["score"]))
+    comps_scored = comps.dropna(subset=["score"])
+    positive_scores = len(comps_scored[comps_scored["score"] > 0])
+
+    return {
+        "subject_ppsf": subject.get("ppsf"),
+        "subject_sqft": subject.get("sqft"),
+        "stage1_raw_comps": stage1,
+        "stage2_after_sqft_filter": stage2,
+        "stage3_after_nsmallest50": stage3,
+        "stage4_after_dropna": stage4,
+        "positive_score_count": positive_scores,
+        "distance_range": (comps["distance"].min(), comps["distance"].max()) if len(comps) > 0 else None,
+        "score_range": (comps_scored["score"].min(), comps_scored["score"].max()) if len(comps_scored) > 0 else None,
+        "sample": comps_scored[["address", "distance", "sqft", "ppsf", "score"]].sort_values("score", ascending=False).head(10).to_dict("records") if len(comps_scored) > 0 else [],
+    }
 
 # -------------------
 # MAIN

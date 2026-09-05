@@ -233,6 +233,8 @@ if st.session_state.run_analysis and property_id:
             comps, price, low, high, median, confidence = get_ranked_comps(
                 property_id, engine
             )
+      
+
 
         # -----------------------
         # SAFETY
